@@ -1,0 +1,100 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id           String         @id @default(cuid())
+  email        String         @unique
+  name         String?
+  passwordHash String
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  holdings     Holding[]
+  transactions Transaction[]
+  sipPlans     SipPlan[]
+}
+
+model Fund {
+  id        String     @id @default(cuid())
+  code      String     @unique
+  name      String
+  type      String?
+  nav       Float?
+  navDate   DateTime?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  holdings  Holding[]
+  navHistory NavHistory[]
+}
+
+model Holding {
+  id           String        @id @default(cuid())
+  userId       String
+  fundId       String
+  shares       Float         @default(0)
+  costAmount   Float         @default(0)
+  note         String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fund         Fund          @relation(fields: [fundId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+  sipPlans     SipPlan[]
+
+  @@unique([userId, fundId])
+  @@index([userId])
+}
+
+model Transaction {
+  id        String   @id @default(cuid())
+  userId    String
+  holdingId String
+  type      String
+  amount    Float
+  shares    Float
+  nav       Float
+  fee       Float    @default(0)
+  tradeDate DateTime
+  note      String?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  holding   Holding  @relation(fields: [holdingId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([holdingId])
+  @@index([tradeDate])
+}
+
+model SipPlan {
+  id          String    @id @default(cuid())
+  userId      String
+  holdingId   String
+  amount      Float
+  dayOfMonth  Int
+  enabled     Boolean   @default(true)
+  note        String?
+  lastRunDate DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  holding     Holding   @relation(fields: [holdingId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([holdingId])
+}
+
+model NavHistory {
+  id     String   @id @default(cuid())
+  fundId String
+  nav    Float
+  date   DateTime
+  fund   Fund     @relation(fields: [fundId], references: [id], onDelete: Cascade)
+
+  @@unique([fundId, date])
+  @@index([fundId])
+}
