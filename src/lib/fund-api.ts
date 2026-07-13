@@ -120,3 +120,93 @@ export async function searchFundsFromEastMoney(keyword: string) {
       type: item.FundBaseInfo?.FTYPE,
     }));
 }
+
+export type FundNavHistoryPoint = {
+  /** YYYY-MM-DD */
+  date: string;
+  nav: number;
+  /** 日涨跌幅 %，可能为空 */
+  changePct?: number;
+};
+
+/**
+ * 历史单位净值（天天基金 f10/lsjz）。
+ * 接口单页约 20 条，按页拉取直到凑够 targetCount 或无更多数据。
+ * 返回按日期升序；失败抛错，由调用方决定是否回退本地 NavHistory。
+ */
+export async function fetchFundNavHistoryFromEastMoney(
+  code: string,
+  targetCount = 90,
+): Promise<FundNavHistoryPoint[]> {
+  const normalized = code.trim();
+  if (!/^\d{6}$/.test(normalized)) {
+    throw new Error("基金代码应为 6 位数字");
+  }
+
+  const want = Math.min(Math.max(targetCount, 1), 200);
+  const pageSize = 20;
+  const maxPages = Math.ceil(want / pageSize) + 1;
+  const byDate = new Map<string, FundNavHistoryPoint>();
+
+  for (let page = 1; page <= maxPages; page++) {
+    const url =
+      `https://api.fund.eastmoney.com/f10/lsjz` +
+      `?callback=jQuery&fundCode=${normalized}` +
+      `&pageIndex=${page}&pageSize=${pageSize}&startDate=&endDate=`;
+
+    const res = await fetch(url, {
+      headers: {
+        Referer: "https://fundf10.eastmoney.com/",
+        "User-Agent": "Mozilla/5.0",
+      },
+      cache: "no-store",
+      signal: AbortSignal.timeout(10000),
+    });
+
+    if (!res.ok) {
+      if (byDate.size > 0) break;
+      throw new Error("拉取历史净值失败");
+    }
+
+    const text = await res.text();
+    const start = text.indexOf("{");
+    const end = text.lastIndexOf("}");
+    if (start === -1 || end === -1) {
+      if (byDate.size > 0) break;
+      throw new Error("历史净值返回格式异常");
+    }
+
+    const data = JSON.parse(text.slice(start, end + 1)) as {
+      Data?: {
+        LSJZList?: Array<{
+          FSRQ?: string;
+          DWJZ?: string;
+          JZZZL?: string;
+        }>;
+      };
+    };
+
+    const list = data.Data?.LSJZList ?? [];
+    if (list.length === 0) break;
+
+    for (const row of list) {
+      const date = row.FSRQ?.trim();
+      const nav = toNum(row.DWJZ);
+      if (!date || nav == null || nav <= 0) continue;
+      const changePct = toNum(row.JZZZL);
+      byDate.set(date, {
+        date,
+        nav,
+        ...(changePct != null ? { changePct } : {}),
+      });
+    }
+
+    if (byDate.size >= want || list.length < pageSize) break;
+  }
+
+  const points = Array.from(byDate.values()).sort((a, b) =>
+    a.date < b.date ? -1 : a.date > b.date ? 1 : 0,
+  );
+  // 若超过目标，保留最近 want 条
+  return points.length > want ? points.slice(points.length - want) : points;
+}

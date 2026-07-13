@@ -50,6 +50,29 @@ type Summary = {
 
 type ListTab = "holdings" | "watchlist"
 
+type MarketIndex = {
+  name: string
+  code: string
+  price: number | null
+  changePct: number | null
+  change: number | null
+}
+
+type RecentTx = {
+  id: string
+  type: string
+  amount: number
+  shares: number
+  tradeDate: string
+  holding: { fund: { name: string; code: string } }
+}
+
+const TX_LABEL: Record<string, string> = {
+  BUY: "买入",
+  SELL: "卖出",
+  SIP: "定投",
+}
+
 function fmt(v: number) {
   return v.toLocaleString("zh-CN", {
     minimumFractionDigits: 2,
@@ -97,11 +120,11 @@ function MetricCell({
   valueClassName?: string
 }) {
   return (
-    <div className="min-w-0 text-center">
-      <p className="text-xs text-muted-foreground">{label}</p>
+    <div className="min-w-0 overflow-hidden px-2 text-center sm:px-3">
+      <p className="text-[11px] text-muted-foreground sm:text-xs">{label}</p>
       <p
         className={cn(
-          "mt-1.5 truncate text-sm font-medium tabular-nums tracking-tight",
+          "mt-1.5 break-all text-xs font-medium leading-snug tabular-nums tracking-tight sm:text-sm",
           valueClassName,
         )}
       >
@@ -111,20 +134,43 @@ function MetricCell({
   )
 }
 
+function fmtIndexPrice(v: number | null) {
+  if (v == null) return "—"
+  return v.toLocaleString("zh-CN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+}
+
 export function DashboardClient() {
   const [holdings, setHoldings] = useState<Holding[]>([])
   const [watchlist, setWatchlist] = useState<WatchItem[]>([])
+  const [recentTxs, setRecentTxs] = useState<RecentTx[]>([])
   const [summary, setSummary] = useState<Summary | null>(null)
+  const [indices, setIndices] = useState<MarketIndex[]>([])
   const [tab, setTab] = useState<ListTab>("holdings")
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [autoRefreshed, setAutoRefreshed] = useState(false)
 
+  const fetchIndices = useCallback(async () => {
+    try {
+      const r = await fetch("/api/market/indices")
+      if (r.ok) {
+        const d = await r.json()
+        setIndices(d.data.indices ?? [])
+      }
+    } catch {
+      // 指数失败不挡主流程
+    }
+  }, [])
+
   const fetchData = useCallback(async () => {
     try {
-      const [hR, wR] = await Promise.all([
+      const [hR, wR, tR] = await Promise.all([
         fetch("/api/holdings"),
         fetch("/api/watchlist"),
+        fetch("/api/transactions?limit=5"),
       ])
       if (hR.ok) {
         const d = await hR.json()
@@ -135,6 +181,10 @@ export function DashboardClient() {
         const d = await wR.json()
         setWatchlist(d.data.items)
       }
+      if (tR.ok) {
+        const d = await tR.json()
+        setRecentTxs(Array.isArray(d.data) ? d.data : [])
+      }
     } finally {
       setLoading(false)
     }
@@ -144,18 +194,22 @@ export function DashboardClient() {
     async (silent = false) => {
       if (!silent) setRefreshing(true)
       try {
-        await fetch("/api/funds", { method: "POST" })
+        await Promise.all([
+          fetch("/api/funds", { method: "POST" }),
+          fetchIndices(),
+        ])
         await fetchData()
       } finally {
         if (!silent) setRefreshing(false)
       }
     },
-    [fetchData],
+    [fetchData, fetchIndices],
   )
 
   useEffect(() => {
-    fetchData()
-  }, [fetchData])
+    void fetchData()
+    void fetchIndices()
+  }, [fetchData, fetchIndices])
 
   useEffect(() => {
     if (loading || autoRefreshed) return
@@ -187,7 +241,6 @@ export function DashboardClient() {
   const profit = summary?.totalEstimateProfit ?? 0
   const profitRate = summary?.totalEstimateProfitRate ?? 0
   const cost = summary?.totalCost ?? 0
-  const hasAny = holdings.length > 0 || watchlist.length > 0
 
   const estimateTime =
     holdings.find((h) => h.fund.estimateTime)?.fund.estimateTime ??
@@ -198,6 +251,38 @@ export function DashboardClient() {
 
   return (
     <div className="mx-auto w-full max-w-xl px-5 py-8 sm:px-6 sm:py-10">
+      {/* Market index strip — slim horizontal scroll */}
+      {indices.length > 0 && (
+        <div className="mb-6 -mx-1">
+          <div
+            className="flex gap-2 overflow-x-auto px-1 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            style={{ WebkitOverflowScrolling: "touch" }}
+          >
+            {indices.map((idx) => (
+              <div
+                key={idx.code}
+                className="flex shrink-0 items-center gap-2 rounded-full border bg-muted/30 px-3 py-1.5"
+              >
+                <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+                  {idx.name}
+                </span>
+                <span className="text-[11px] font-medium tabular-nums tracking-tight whitespace-nowrap">
+                  {fmtIndexPrice(idx.price)}
+                </span>
+                <span
+                  className={cn(
+                    "text-[11px] tabular-nums whitespace-nowrap",
+                    tone(idx.changePct),
+                  )}
+                >
+                  {fmtChg(idx.changePct)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Hero — always holdings summary (assets) */}
       <section className="relative mb-8 text-center">
         <div className="absolute right-0 top-0">
@@ -205,8 +290,8 @@ export function DashboardClient() {
             variant="ghost"
             size="icon-sm"
             onClick={() => handleRefresh(false)}
-            disabled={refreshing || !hasAny}
-            title="刷新估值"
+            disabled={refreshing}
+            title="刷新估值与指数"
             className="text-muted-foreground"
           >
             <RefreshCwIcon
@@ -240,7 +325,7 @@ export function DashboardClient() {
           )}
         </div>
 
-        <div className="mt-8 grid grid-cols-3 divide-x rounded-xl border bg-muted/40 py-4">
+        <div className="mt-8 grid grid-cols-3 items-start divide-x rounded-xl border bg-muted/40 py-3.5 sm:py-4">
           <MetricCell label="总成本" value={fmt(cost)} />
           <MetricCell
             label="累计盈亏"
@@ -319,9 +404,12 @@ export function DashboardClient() {
                   <li key={h.id} className="px-4 py-3.5 sm:px-5">
                     <div className="flex items-baseline justify-between gap-6">
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium leading-snug">
+                        <Link
+                          href={`/funds/${h.fund.code}`}
+                          className="block truncate text-sm font-medium leading-snug transition-colors hover:text-foreground/80"
+                        >
                           {h.fund.name}
-                        </p>
+                        </Link>
                         <p className="mt-1 text-xs tabular-nums text-muted-foreground">
                           {h.fund.code}
                           <span className="mx-1.5 opacity-40">·</span>
@@ -402,9 +490,12 @@ export function DashboardClient() {
                   <div className="flex items-baseline justify-between gap-6">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className="truncate text-sm font-medium leading-snug">
+                        <Link
+                          href={`/funds/${item.fund.code}`}
+                          className="block truncate text-sm font-medium leading-snug transition-colors hover:text-foreground/80"
+                        >
                           {item.fund.name}
-                        </p>
+                        </Link>
                         {item.isHeld && (
                           <span className="shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
                             已持有
@@ -451,14 +542,88 @@ export function DashboardClient() {
                       <>
                         <span className="mx-2 opacity-30">|</span>
                         <Link
-                          href="/holdings"
+                          href={`/holdings?code=${item.fund.code}&name=${encodeURIComponent(item.fund.name)}`}
                           className="text-foreground/70 transition-colors hover:text-foreground"
                         >
-                          去建仓
+                          建仓
                         </Link>
                       </>
                     )}
                   </p>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </section>
+
+      {/* Recent transactions */}
+      <section className="mt-8">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="text-sm font-medium">最近交易</h2>
+          <Link
+            href="/transactions"
+            className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+          >
+            全部记录
+          </Link>
+        </div>
+        {recentTxs.length === 0 ? (
+          <div className="rounded-xl border border-dashed py-8 text-center">
+            <p className="text-sm text-muted-foreground">暂无交易</p>
+            <Link
+              href="/transactions"
+              className="mt-2 inline-block text-sm text-foreground/80 transition-colors hover:text-foreground"
+            >
+              去记一笔
+            </Link>
+          </div>
+        ) : (
+          <ul className="divide-y overflow-hidden rounded-xl border">
+            {recentTxs.map((tx) => {
+              const label = TX_LABEL[tx.type] ?? tx.type
+              const isSell = tx.type === "SELL"
+              return (
+                <li key={tx.id} className="px-4 py-3 sm:px-5">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={cn(
+                            "shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-medium",
+                            isSell
+                              ? "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400"
+                              : tx.type === "SIP"
+                                ? "bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-400"
+                                : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400",
+                          )}
+                        >
+                          {label}
+                        </span>
+                        <p className="truncate text-sm font-medium leading-snug">
+                          {tx.holding.fund.name}
+                        </p>
+                      </div>
+                      <p className="mt-1 text-xs tabular-nums text-muted-foreground">
+                        {tx.tradeDate.slice(0, 10)}
+                        <span className="mx-1.5 opacity-40">·</span>
+                        {tx.holding.fund.code}
+                        <span className="mx-1.5 opacity-40">·</span>
+                        {fmt(tx.shares)} 份
+                      </p>
+                    </div>
+                    <p
+                      className={cn(
+                        "shrink-0 text-sm font-medium tabular-nums tracking-tight",
+                        isSell
+                          ? "text-emerald-600 dark:text-emerald-400"
+                          : "text-foreground",
+                      )}
+                    >
+                      {isSell ? "+" : "−"}
+                      {fmt(tx.amount)}
+                    </p>
+                  </div>
                 </li>
               )
             })}

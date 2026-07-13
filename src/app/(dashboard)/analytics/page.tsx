@@ -98,11 +98,11 @@ function MetricCell({
   valueClassName?: string
 }) {
   return (
-    <div className="min-w-0 text-center">
-      <p className="text-xs text-muted-foreground">{label}</p>
+    <div className="min-w-0 overflow-hidden px-2 text-center sm:px-3">
+      <p className="text-[11px] text-muted-foreground sm:text-xs">{label}</p>
       <p
         className={cn(
-          "mt-1.5 truncate text-sm font-medium tabular-nums tracking-tight",
+          "mt-1.5 break-all text-xs font-medium leading-snug tabular-nums tracking-tight sm:text-sm",
           valueClassName,
         )}
       >
@@ -200,7 +200,7 @@ export default function AnalyticsPage() {
               }`}
         </p>
 
-        <div className="mt-8 grid grid-cols-3 divide-x rounded-xl border bg-muted/40 py-4">
+        <div className="mt-8 grid grid-cols-3 items-start divide-x rounded-xl border bg-muted/40 py-3.5 sm:py-4">
           <MetricCell label="总成本" value={fmt(summary.totalCost)} />
           <MetricCell
             label="总资产"
@@ -258,20 +258,23 @@ export default function AnalyticsPage() {
                 {
                   label: "净投入",
                   value: fmt(flow.netInvested),
-                  sub: flow.feeTotal > 0 ? `手续费 ${fmt(flow.feeTotal)}` : "含手续费口径见备注",
+                  sub:
+                    flow.feeTotal > 0
+                      ? `手续费 ${fmt(flow.feeTotal)}`
+                      : `${flow.buyCount + flow.sipCount + flow.sellCount} 笔合计`,
                 },
               ].map((cell) => (
                 <div
                   key={cell.label}
-                  className="bg-background px-3 py-3 text-center"
+                  className="min-w-0 overflow-hidden bg-background px-2.5 py-3 text-center sm:px-3"
                 >
                   <p className="text-[11px] text-muted-foreground">
                     {cell.label}
                   </p>
-                  <p className="mt-1 truncate text-sm font-medium tabular-nums tracking-tight">
+                  <p className="mt-1 break-all text-xs font-medium leading-snug tabular-nums tracking-tight sm:text-sm">
                     {cell.value}
                   </p>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  <p className="mt-0.5 break-all text-[10px] leading-snug text-muted-foreground sm:text-[11px]">
                     {cell.sub}
                   </p>
                 </div>
@@ -296,14 +299,14 @@ export default function AnalyticsPage() {
                 </p>
               </div>
             ) : (
-              <div className="rounded-xl border px-2 pb-2 pt-4">
+              <div className="overflow-hidden rounded-xl border px-2 pb-2 pt-4">
                 <ChartContainer
                   config={chartConfig}
-                  className="aspect-[16/9] w-full"
+                  className="aspect-[16/9] w-full overflow-hidden"
                 >
                   <BarChart
                     data={chartData}
-                    margin={{ left: 0, right: 8, top: 4, bottom: 0 }}
+                    margin={{ left: 4, right: 8, top: 8, bottom: 4 }}
                   >
                     <CartesianGrid vertical={false} strokeDasharray="3 3" />
                     <XAxis
@@ -311,13 +314,16 @@ export default function AnalyticsPage() {
                       tickLine={false}
                       axisLine={false}
                       tickMargin={8}
-                      fontSize={11}
+                      fontSize={10}
+                      interval={0}
+                      minTickGap={8}
                     />
                     <YAxis
                       tickLine={false}
                       axisLine={false}
-                      width={40}
-                      fontSize={11}
+                      width={36}
+                      fontSize={10}
+                      tickCount={4}
                       tickFormatter={(v) =>
                         Math.abs(v) >= 1000
                           ? `${(v / 1000).toFixed(0)}k`
@@ -387,9 +393,12 @@ export default function AnalyticsPage() {
                   <li key={item.holdingId} className="px-4 py-3.5 sm:px-5">
                     <div className="flex items-baseline justify-between gap-4">
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium leading-snug">
+                        <Link
+                          href={`/funds/${item.fundCode}`}
+                          className="truncate text-sm font-medium leading-snug transition-colors hover:text-foreground/80"
+                        >
                           {item.fundName}
-                        </p>
+                        </Link>
                         <p className="mt-1 text-xs tabular-nums text-muted-foreground">
                           {item.fundCode}
                           <span className="mx-1.5 opacity-40">·</span>
@@ -435,7 +444,12 @@ export default function AnalyticsPage() {
                           <span className="mr-2 text-xs tabular-nums text-muted-foreground">
                             {idx + 1}
                           </span>
-                          {item.fundName}
+                          <Link
+                            href={`/funds/${item.fundCode}`}
+                            className="transition-colors hover:text-foreground/80"
+                          >
+                            {item.fundName}
+                          </Link>
                         </p>
                         <p className="mt-1 text-xs tabular-nums text-muted-foreground">
                           成本 {fmt(item.costAmount)}

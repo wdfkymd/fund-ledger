@@ -1,6 +1,8 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, Suspense } from "react"
+import Link from "next/link"
+import { useSearchParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -73,11 +75,11 @@ function MiniMetric({
   valueClassName?: string
 }) {
   return (
-    <div className="min-w-0 text-center">
+    <div className="min-w-0 overflow-hidden px-1.5 text-center sm:px-2">
       <p className="text-[11px] text-muted-foreground">{label}</p>
       <p
         className={cn(
-          "mt-1 truncate text-xs font-medium tabular-nums tracking-tight",
+          "mt-1 break-all text-[11px] font-medium leading-snug tabular-nums tracking-tight sm:text-xs",
           valueClassName,
         )}
       >
@@ -87,7 +89,9 @@ function MiniMetric({
   )
 }
 
-export default function HoldingsPage() {
+function HoldingsPageInner() {
+  const searchParams = useSearchParams()
+  const router = useRouter()
   const [holdings, setHoldings] = useState<Holding[]>([])
   const [loading, setLoading] = useState(true)
   const [addOpen, setAddOpen] = useState(false)
@@ -101,6 +105,7 @@ export default function HoldingsPage() {
   })
   const [error, setError] = useState("")
   const [submitting, setSubmitting] = useState(false)
+  const [prefillDone, setPrefillDone] = useState(false)
 
   const fetchHoldings = useCallback(async () => {
     try {
@@ -117,6 +122,26 @@ export default function HoldingsPage() {
   useEffect(() => {
     fetchHoldings()
   }, [fetchHoldings])
+
+  // 支持 /holdings?code=000001&name=xxx 预填并打开添加弹窗
+  useEffect(() => {
+    if (prefillDone) return
+    const code = (searchParams.get("code") ?? "").trim()
+    if (!/^\d{6}$/.test(code)) {
+      setPrefillDone(true)
+      return
+    }
+    const name = (searchParams.get("name") ?? "").trim()
+    setAddForm({
+      fundCode: code,
+      fundName: name,
+      shares: "",
+      costPrice: "",
+    })
+    setAddOpen(true)
+    setPrefillDone(true)
+    router.replace("/holdings", { scroll: false })
+  }, [searchParams, prefillDone, router])
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault()
@@ -407,9 +432,12 @@ export default function HoldingsPage() {
                 {/* Primary row — same as dashboard / watchlist */}
                 <div className="flex items-baseline justify-between gap-6">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium leading-snug">
+                    <Link
+                      href={`/funds/${h.fund.code}`}
+                      className="block truncate text-sm font-medium leading-snug transition-colors hover:text-foreground/80"
+                    >
                       {h.fund.name}
-                    </p>
+                    </Link>
                     <p className="mt-1 text-xs tabular-nums text-muted-foreground">
                       {h.fund.code}
                       <span className="mx-1.5 opacity-40">·</span>
@@ -436,7 +464,7 @@ export default function HoldingsPage() {
                 </div>
 
                 {/* Secondary metrics — same strip language as dashboard */}
-                <div className="mt-3 grid grid-cols-3 divide-x rounded-lg bg-muted/40 py-2.5">
+                <div className="mt-3 grid grid-cols-3 items-start divide-x rounded-lg bg-muted/40 py-2.5">
                   <MiniMetric
                     label="成本"
                     value={
@@ -495,5 +523,19 @@ export default function HoldingsPage() {
         </ul>
       )}
     </div>
+  )
+}
+
+export default function HoldingsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex flex-1 items-center justify-center p-8">
+          <p className="text-sm text-muted-foreground">加载中…</p>
+        </div>
+      }
+    >
+      <HoldingsPageInner />
+    </Suspense>
   )
 }

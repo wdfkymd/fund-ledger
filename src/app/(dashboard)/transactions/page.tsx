@@ -535,22 +535,22 @@ export default function TransactionsPage() {
                 </div>
 
                 {/* Secondary detail strip */}
-                <div className="mt-3 grid grid-cols-3 divide-x rounded-lg bg-muted/40 py-2.5 text-center">
-                  <div className="min-w-0 px-1">
+                <div className="mt-3 grid grid-cols-3 items-start divide-x rounded-lg bg-muted/40 py-2.5 text-center">
+                  <div className="min-w-0 overflow-hidden px-1.5 sm:px-2">
                     <p className="text-[11px] text-muted-foreground">净值</p>
-                    <p className="mt-1 truncate text-xs font-medium tabular-nums tracking-tight">
+                    <p className="mt-1 break-all text-[11px] font-medium leading-snug tabular-nums tracking-tight sm:text-xs">
                       {tx.nav.toFixed(4)}
                     </p>
                   </div>
-                  <div className="min-w-0 px-1">
+                  <div className="min-w-0 overflow-hidden px-1.5 sm:px-2">
                     <p className="text-[11px] text-muted-foreground">手续费</p>
-                    <p className="mt-1 truncate text-xs font-medium tabular-nums tracking-tight">
+                    <p className="mt-1 break-all text-[11px] font-medium leading-snug tabular-nums tracking-tight sm:text-xs">
                       {tx.fee > 0 ? fmt(tx.fee) : "—"}
                     </p>
                   </div>
-                  <div className="min-w-0 px-1">
+                  <div className="min-w-0 overflow-hidden px-1.5 sm:px-2">
                     <p className="text-[11px] text-muted-foreground">类型</p>
-                    <p className="mt-1 truncate text-xs font-medium tracking-tight">
+                    <p className="mt-1 break-all text-[11px] font-medium leading-snug tracking-tight sm:text-xs">
                       {meta.label}
                     </p>
                   </div>

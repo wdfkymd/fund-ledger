@@ -9,6 +9,12 @@ export async function GET(req: NextRequest) {
   try {
     const user = await requireUser();
     const holdingId = req.nextUrl.searchParams.get("holdingId") ?? undefined;
+    const limitRaw = req.nextUrl.searchParams.get("limit");
+    const limit =
+      limitRaw != null
+        ? Math.min(Math.max(parseInt(limitRaw, 10) || 0, 0), 100)
+        : undefined;
+
     const transactions = await prisma.transaction.findMany({
       where: {
         userId: user.id,
@@ -17,7 +23,8 @@ export async function GET(req: NextRequest) {
       include: {
         holding: { include: { fund: true } },
       },
-      orderBy: { tradeDate: "desc" },
+      orderBy: [{ tradeDate: "desc" }, { createdAt: "desc" }],
+      ...(limit ? { take: limit } : {}),
     });
     return ok(transactions);
   } catch (error) {

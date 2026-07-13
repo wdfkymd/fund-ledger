@@ -16,8 +16,10 @@ import {
   Trash2Icon,
   RefreshCwIcon,
   StarIcon,
+  BriefcaseIcon,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useRouter } from "next/navigation"
 
 type WatchItem = {
   id: string
@@ -53,13 +55,19 @@ function fmtChg(pct: number | null | undefined) {
   return `${sign}${pct.toFixed(2)}%`
 }
 
+const emptyHold = { shares: "", costPrice: "" }
+
 export default function WatchlistPage() {
+  const router = useRouter()
   const [items, setItems] = useState<WatchItem[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [autoRefreshed, setAutoRefreshed] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
   const [addForm, setAddForm] = useState(emptyAdd)
+  const [holdOpen, setHoldOpen] = useState(false)
+  const [holdTarget, setHoldTarget] = useState<WatchItem | null>(null)
+  const [holdForm, setHoldForm] = useState(emptyHold)
   const [error, setError] = useState("")
   const [submitting, setSubmitting] = useState(false)
 
@@ -136,6 +144,52 @@ export default function WatchlistPage() {
     const r = await fetch(`/api/watchlist/${id}`, { method: "DELETE" })
     if (r.ok) {
       await fetchItems()
+    }
+  }
+
+  function openHold(item: WatchItem) {
+    setHoldTarget(item)
+    const nav = item.fund.nav ?? item.fund.estimateNav
+    setHoldForm({
+      shares: "",
+      costPrice: nav != null ? nav.toFixed(4) : "",
+    })
+    setError("")
+    setHoldOpen(true)
+  }
+
+  async function handleHold(e: React.FormEvent) {
+    e.preventDefault()
+    if (!holdTarget) return
+    setError("")
+    setSubmitting(true)
+    try {
+      const r = await fetch("/api/holdings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fundCode: holdTarget.fund.code,
+          fundName: holdTarget.fund.name,
+          shares: holdForm.shares ? parseFloat(holdForm.shares) : undefined,
+          costPrice: holdForm.costPrice
+            ? parseFloat(holdForm.costPrice)
+            : undefined,
+        }),
+      })
+      const d = await r.json()
+      if (d.ok) {
+        setHoldOpen(false)
+        setHoldTarget(null)
+        setHoldForm(emptyHold)
+        await fetchItems()
+        router.push("/holdings")
+      } else {
+        setError(d.error || "建仓失败")
+      }
+    } catch {
+      setError("网络错误")
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -264,9 +318,12 @@ export default function WatchlistPage() {
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <p className="truncate text-sm font-medium leading-snug">
+                      <Link
+                        href={`/funds/${item.fund.code}`}
+                        className="block truncate text-sm font-medium leading-snug transition-colors hover:text-foreground/80"
+                      >
                         {item.fund.name}
-                      </p>
+                      </Link>
                       {item.isHeld && (
                         <span className="shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
                           已持有
@@ -292,6 +349,17 @@ export default function WatchlistPage() {
                         {fmtChg(chg)}
                       </p>
                     </div>
+                    {!item.isHeld && (
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        onClick={() => openHold(item)}
+                        title="建仓"
+                        className="mt-0.5 text-muted-foreground hover:text-foreground"
+                      >
+                        <BriefcaseIcon className="size-3.5" />
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="icon-xs"
@@ -323,12 +391,13 @@ export default function WatchlistPage() {
                   {!item.isHeld && (
                     <>
                       <span className="mx-2 opacity-30">|</span>
-                      <Link
-                        href="/holdings"
+                      <button
+                        type="button"
+                        onClick={() => openHold(item)}
                         className="text-foreground/70 transition-colors hover:text-foreground"
                       >
-                        去建仓
-                      </Link>
+                        建仓
+                      </button>
                     </>
                   )}
                 </p>
@@ -337,6 +406,80 @@ export default function WatchlistPage() {
           })}
         </ul>
       )}
+
+      {/* 一键建仓 */}
+      <Dialog
+        open={holdOpen}
+        onOpenChange={(o) => {
+          setHoldOpen(o)
+          if (!o) {
+            setHoldTarget(null)
+            setHoldForm(emptyHold)
+            setError("")
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              建仓
+              {holdTarget ? ` · ${holdTarget.fund.name}` : ""}
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleHold} className="space-y-4">
+            <p className="text-xs tabular-nums text-muted-foreground">
+              {holdTarget?.fund.code}
+              {holdTarget?.fund.nav != null && (
+                <>
+                  <span className="mx-1.5 opacity-40">·</span>
+                  单位净值 {fmtNav(holdTarget.fund.nav)}
+                </>
+              )}
+            </p>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">持仓份额</label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="如 100"
+                  value={holdForm.shares}
+                  onChange={(e) =>
+                    setHoldForm({ ...holdForm, shares: e.target.value })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">成本价</label>
+                <Input
+                  type="number"
+                  step="0.0001"
+                  min="0"
+                  placeholder="如 1.2345"
+                  value={holdForm.costPrice}
+                  onChange={(e) =>
+                    setHoldForm({ ...holdForm, costPrice: e.target.value })
+                  }
+                />
+              </div>
+            </div>
+            {holdForm.shares && holdForm.costPrice && (
+              <p className="text-xs text-muted-foreground">
+                总成本 ≈ ¥
+                {(
+                  parseFloat(holdForm.shares) * parseFloat(holdForm.costPrice) ||
+                  0
+                ).toFixed(2)}
+              </p>
+            )}
+            {error && <p className="text-xs text-red-500">{error}</p>}
+            <Button type="submit" className="w-full" disabled={submitting}>
+              确认建仓
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

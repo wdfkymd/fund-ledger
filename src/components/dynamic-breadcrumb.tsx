@@ -17,6 +17,7 @@ const labelMap: Record<string, string> = {
   watchlist: "自选",
   transactions: "交易记录",
   analytics: "收益",
+  funds: "基金",
   settings: "设置",
   "sign-in": "登录",
   "sign-up": "注册",

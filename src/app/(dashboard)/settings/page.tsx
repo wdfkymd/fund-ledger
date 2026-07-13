@@ -2,24 +2,19 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { useTheme } from "next-themes"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import {
   LoaderCircleIcon,
   LogOutIcon,
   MoonIcon,
   SunIcon,
   MonitorIcon,
+  DownloadIcon,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+
+type ExportType = "holdings" | "transactions" | "watchlist"
 
 type UserInfo = {
   id: string
@@ -44,6 +39,8 @@ export default function SettingsPage() {
   const [passwordSaving, setPasswordSaving] = useState(false)
 
   const [loggingOut, setLoggingOut] = useState(false)
+  const [exporting, setExporting] = useState<ExportType | null>(null)
+  const [exportError, setExportError] = useState("")
   const { theme, setTheme, resolvedTheme } = useTheme()
   const [themeReady, setThemeReady] = useState(false)
 
@@ -138,93 +135,155 @@ export default function SettingsPage() {
     }
   }
 
+  async function handleExport(type: ExportType) {
+    setExportError("")
+    setExporting(type)
+    try {
+      const r = await fetch(`/api/export?type=${type}`)
+      if (!r.ok) {
+        const d = await r.json().catch(() => null)
+        setExportError(d?.error || "导出失败")
+        return
+      }
+      const blob = await r.blob()
+      const cd = r.headers.get("Content-Disposition") ?? ""
+      const match = /filename="([^"]+)"/.exec(cd)
+      const filename =
+        match?.[1] ??
+        `fund-ledger-${type}-${new Date().toISOString().slice(0, 10)}.csv`
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch {
+      setExportError("网络错误")
+    } finally {
+      setExporting(null)
+    }
+  }
+
   if (loading) {
     return (
-      <div className="flex flex-1 items-center justify-center p-6 text-muted-foreground">
-        加载中...
+      <div className="flex flex-1 items-center justify-center p-8">
+        <p className="text-sm text-muted-foreground">加载中…</p>
       </div>
     )
   }
 
   const createdLabel = user?.createdAt
     ? new Date(user.createdAt).toLocaleString("zh-CN")
-    : "-"
+    : "—"
 
   const themeOptions = [
     { value: "light", label: "浅色", icon: SunIcon },
     { value: "dark", label: "深色", icon: MoonIcon },
-    { value: "system", label: "跟随系统", icon: MonitorIcon },
+    { value: "system", label: "系统", icon: MonitorIcon },
   ] as const
 
   return (
-    <div className="flex flex-1 flex-col gap-4 p-4 md:p-6">
-      <div>
-        <h1 className="text-lg font-semibold">设置</h1>
-        <p className="text-sm text-muted-foreground">管理账号资料、密码与会话</p>
+    <div className="mx-auto w-full max-w-xl px-5 py-8 sm:px-6 sm:py-10">
+      <div className="mb-8">
+        <h1 className="text-base font-semibold tracking-tight">设置</h1>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          账号、数据导出、外观与会话
+        </p>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">账号信息</CardTitle>
-            <CardDescription>邮箱用于登录，不可在此修改</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleProfile} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">邮箱</Label>
-                <Input id="email" value={user?.email ?? ""} disabled readOnly />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="name">昵称</Label>
-                <Input
-                  id="name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="显示名称"
-                  maxLength={50}
-                  required
-                />
-              </div>
-              <div className="space-y-1 text-xs text-muted-foreground">
-                <p>注册时间：{createdLabel}</p>
-              </div>
-              {profileError && (
-                <p className="text-xs text-red-500">{profileError}</p>
+      <div className="space-y-6">
+        {/* Profile */}
+        <section className="overflow-hidden rounded-xl border">
+          <div className="border-b px-4 py-3 sm:px-5">
+            <h2 className="text-sm font-medium">账号</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              邮箱用于登录，不可修改
+            </p>
+          </div>
+          <form onSubmit={handleProfile} className="space-y-4 px-4 py-4 sm:px-5">
+            <div className="space-y-1.5">
+              <label htmlFor="email" className="text-xs text-muted-foreground">
+                邮箱
+              </label>
+              <Input
+                id="email"
+                value={user?.email ?? ""}
+                disabled
+                readOnly
+                className="tabular-nums"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label htmlFor="name" className="text-xs text-muted-foreground">
+                昵称
+              </label>
+              <Input
+                id="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="显示名称"
+                maxLength={50}
+                required
+              />
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              注册时间 {createdLabel}
+            </p>
+            {profileError && (
+              <p className="text-xs text-red-500">{profileError}</p>
+            )}
+            {profileMsg && (
+              <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                {profileMsg}
+              </p>
+            )}
+            <Button type="submit" size="sm" disabled={profileSaving}>
+              {profileSaving && (
+                <LoaderCircleIcon className="mr-1 size-3.5 animate-spin" />
               )}
-              {profileMsg && (
-                <p className="text-xs text-emerald-600">{profileMsg}</p>
-              )}
-              <Button type="submit" disabled={profileSaving}>
-                {profileSaving && (
-                  <LoaderCircleIcon className="mr-1 size-4 animate-spin" />
-                )}
-                保存昵称
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+              保存昵称
+            </Button>
+          </form>
+        </section>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">修改密码</CardTitle>
-            <CardDescription>修改成功后仍保持登录状态</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handlePassword} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="currentPassword">当前密码</Label>
-                <Input
-                  id="currentPassword"
-                  type="password"
-                  autoComplete="current-password"
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="newPassword">新密码</Label>
+        {/* Password */}
+        <section className="overflow-hidden rounded-xl border">
+          <div className="border-b px-4 py-3 sm:px-5">
+            <h2 className="text-sm font-medium">密码</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              修改后仍保持登录
+            </p>
+          </div>
+          <form
+            onSubmit={handlePassword}
+            className="space-y-4 px-4 py-4 sm:px-5"
+          >
+            <div className="space-y-1.5">
+              <label
+                htmlFor="currentPassword"
+                className="text-xs text-muted-foreground"
+              >
+                当前密码
+              </label>
+              <Input
+                id="currentPassword"
+                type="password"
+                autoComplete="current-password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                required
+              />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="newPassword"
+                  className="text-xs text-muted-foreground"
+                >
+                  新密码
+                </label>
                 <Input
                   id="newPassword"
                   type="password"
@@ -236,8 +295,13 @@ export default function SettingsPage() {
                   minLength={6}
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="confirmPassword">确认新密码</Label>
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="confirmPassword"
+                  className="text-xs text-muted-foreground"
+                >
+                  确认新密码
+                </label>
                 <Input
                   id="confirmPassword"
                   type="password"
@@ -248,82 +312,128 @@ export default function SettingsPage() {
                   minLength={6}
                 />
               </div>
-              {passwordError && (
-                <p className="text-xs text-red-500">{passwordError}</p>
+            </div>
+            {passwordError && (
+              <p className="text-xs text-red-500">{passwordError}</p>
+            )}
+            {passwordMsg && (
+              <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                {passwordMsg}
+              </p>
+            )}
+            <Button type="submit" size="sm" disabled={passwordSaving}>
+              {passwordSaving && (
+                <LoaderCircleIcon className="mr-1 size-3.5 animate-spin" />
               )}
-              {passwordMsg && (
-                <p className="text-xs text-emerald-600">{passwordMsg}</p>
-              )}
-              <Button type="submit" disabled={passwordSaving}>
-                {passwordSaving && (
-                  <LoaderCircleIcon className="mr-1 size-4 animate-spin" />
-                )}
-                更新密码
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+              更新密码
+            </Button>
+          </form>
+        </section>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">外观</CardTitle>
-            <CardDescription>
-              当前：
+        {/* Export */}
+        <section className="overflow-hidden rounded-xl border">
+          <div className="border-b px-4 py-3 sm:px-5">
+            <h2 className="text-sm font-medium">数据导出</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              下载 UTF-8 CSV，可用 Excel / Numbers 打开
+            </p>
+          </div>
+          <div className="space-y-3 px-4 py-4 sm:px-5">
+            <div className="flex flex-wrap gap-2">
+              {(
+                [
+                  { type: "holdings" as const, label: "持仓" },
+                  { type: "transactions" as const, label: "交易记录" },
+                  { type: "watchlist" as const, label: "自选" },
+                ] as const
+              ).map((item) => (
+                <Button
+                  key={item.type}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={exporting !== null}
+                  onClick={() => handleExport(item.type)}
+                >
+                  {exporting === item.type ? (
+                    <LoaderCircleIcon className="mr-1 size-3.5 animate-spin" />
+                  ) : (
+                    <DownloadIcon className="mr-1 size-3.5" />
+                  )}
+                  导出{item.label}
+                </Button>
+              ))}
+            </div>
+            {exportError && (
+              <p className="text-xs text-red-500">{exportError}</p>
+            )}
+          </div>
+        </section>
+
+        {/* Theme */}
+        <section className="overflow-hidden rounded-xl border">
+          <div className="border-b px-4 py-3 sm:px-5">
+            <h2 className="text-sm font-medium">外观</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              当前{" "}
               {themeReady
                 ? resolvedTheme === "dark"
                   ? "深色"
                   : "浅色"
                 : "…"}
-              {theme === "system" ? "（跟随系统）" : ""}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-2">
-              {themeOptions.map((opt) => {
-                const Icon = opt.icon
-                const active = themeReady && theme === opt.value
-                return (
-                  <Button
-                    key={opt.value}
-                    type="button"
-                    variant={active ? "default" : "outline"}
-                    size="sm"
-                    className={cn(!active && "text-muted-foreground")}
-                    onClick={() => setTheme(opt.value)}
-                  >
-                    <Icon className="mr-1.5 size-3.5" />
-                    {opt.label}
-                  </Button>
-                )
-              })}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">会话</CardTitle>
-            <CardDescription>退出后需重新登录才能查看持仓</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              登录会话使用 Cookie 保存，约 7 天有效。可在任意设备上退出本浏览器会话。
+              {theme === "system" ? " · 跟随系统" : ""}
             </p>
+          </div>
+          <div className="flex flex-wrap gap-1.5 p-4 sm:px-5">
+            {themeOptions.map((opt) => {
+              const Icon = opt.icon
+              const active = themeReady && theme === opt.value
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setTheme(opt.value)}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-colors",
+                    active
+                      ? "border-foreground/20 bg-muted text-foreground"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  <Icon className="size-3.5" />
+                  {opt.label}
+                </button>
+              )
+            })}
+          </div>
+        </section>
+
+        {/* Session */}
+        <section className="overflow-hidden rounded-xl border">
+          <div className="border-b px-4 py-3 sm:px-5">
+            <h2 className="text-sm font-medium">会话</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Cookie 约 7 天有效，退出后需重新登录
+            </p>
+          </div>
+          <div className="px-4 py-4 sm:px-5">
             <Button
               type="button"
               variant="outline"
+              size="sm"
               onClick={handleLogout}
               disabled={loggingOut}
+              className="text-muted-foreground hover:text-red-600"
             >
               {loggingOut ? (
-                <LoaderCircleIcon className="mr-1 size-4 animate-spin" />
+                <LoaderCircleIcon className="mr-1 size-3.5 animate-spin" />
               ) : (
-                <LogOutIcon className="mr-1 size-4" />
+                <LogOutIcon className="mr-1 size-3.5" />
               )}
               退出登录
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </section>
       </div>
     </div>
   )

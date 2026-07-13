@@ -53,12 +53,17 @@
 
 - `GET /api/funds?q=` 搜索
 - `GET /api/funds?code=` 查单只（含 `nav` 单位净值 + `estimateNav` 实时估值）
+- `GET /api/funds/:code` 详情：行情、近 90 日净值、本人持仓/交易
 - `POST /api/funds` 刷新当前用户持仓 + 自选基金：写入单位净值与盘中估值（`gsz`/`gszzl`/`gztime`）
 
 ### 统计 / 收益分析
 
 - `GET /api/stats` 持仓汇总（兼容）
 - `GET /api/analytics` 收益页数据：汇总、资金流水、占比、盈亏排行、近 12 月流水
+
+### 大盘指数
+
+- `GET /api/market/indices` 上证 / 深成 / 创业 / 沪深300（东财延迟行情）
 
 ## 本地命令
 
@@ -86,6 +91,7 @@ systemctl --user restart fund-ledger   # 默认 :8000
 | `/watchlist` | 自选（添加/移除/刷新估值） |
 | `/transactions` | 交易（记一笔/编辑/删除） |
 | `/analytics` | 收益分析（流水 / 占比 / 排行） |
+| `/funds/:code` | 单基金详情（净值曲线 / 持仓 / 交易） |
 | `/settings` | 设置（昵称 / 改密 / 主题 / 退出） |
 
 ## 数据模型
