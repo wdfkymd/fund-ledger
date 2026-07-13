@@ -5,9 +5,13 @@ import { fail, ok, toErrorMessage, unauthorized } from "@/lib/api";
 import { holdingCreateSchema } from "@/lib/validators";
 import { fetchFundFromEastMoney } from "@/lib/fund-api";
 import {
+  calcDayProfit,
+  calcDayProfitRate,
+  calcEstimateValue,
   calcMarketValue,
   calcProfit,
   calcProfitRate,
+  roundMoney,
 } from "@/lib/finance";
 
 export async function GET() {
@@ -21,8 +25,26 @@ export async function GET() {
 
     const data = holdings.map((h) => {
       const marketValue = calcMarketValue(h.shares, h.fund.nav);
+      const estimateValue = calcEstimateValue(
+        h.shares,
+        h.fund.estimateNav,
+        h.fund.nav,
+      );
       const profit = calcProfit(marketValue, h.costAmount);
       const profitRate = calcProfitRate(profit, h.costAmount);
+      const estimateProfit = calcProfit(estimateValue, h.costAmount);
+      const estimateProfitRate = calcProfitRate(estimateProfit, h.costAmount);
+      const dayProfit = calcDayProfit(
+        h.shares,
+        h.fund.estimateNav,
+        h.fund.nav,
+        h.fund.estimateChangePct,
+      );
+      const dayProfitRate = calcDayProfitRate(
+        dayProfit,
+        h.shares,
+        h.fund.nav,
+      );
       return {
         id: h.id,
         shares: h.shares,
@@ -31,6 +53,11 @@ export async function GET() {
         marketValue,
         profit,
         profitRate,
+        estimateValue,
+        estimateProfit,
+        estimateProfitRate,
+        dayProfit,
+        dayProfitRate,
         fund: h.fund,
         createdAt: h.createdAt,
         updatedAt: h.updatedAt,
@@ -42,16 +69,48 @@ export async function GET() {
         acc.totalCost += item.costAmount;
         acc.totalMarketValue += item.marketValue;
         acc.totalProfit += item.profit;
+        acc.totalEstimateValue += item.estimateValue;
+        acc.totalEstimateProfit += item.estimateProfit;
+        if (item.dayProfit != null) {
+          acc.totalDayProfit = roundMoney(
+            (acc.totalDayProfit ?? 0) + item.dayProfit,
+            4,
+          );
+          acc.dayProfitBase += item.marketValue;
+        }
         return acc;
       },
-      { totalCost: 0, totalMarketValue: 0, totalProfit: 0 },
+      {
+        totalCost: 0,
+        totalMarketValue: 0,
+        totalProfit: 0,
+        totalEstimateValue: 0,
+        totalEstimateProfit: 0,
+        totalDayProfit: null as number | null,
+        dayProfitBase: 0,
+      },
     );
+
+    const totalDayProfitRate =
+      summary.totalDayProfit != null && summary.dayProfitBase > 0
+        ? roundMoney(summary.totalDayProfit / summary.dayProfitBase, 6)
+        : null;
 
     return ok({
       holdings: data,
       summary: {
-        ...summary,
+        totalCost: summary.totalCost,
+        totalMarketValue: summary.totalMarketValue,
+        totalProfit: summary.totalProfit,
+        totalEstimateValue: summary.totalEstimateValue,
+        totalEstimateProfit: summary.totalEstimateProfit,
         totalProfitRate: calcProfitRate(summary.totalProfit, summary.totalCost),
+        totalEstimateProfitRate: calcProfitRate(
+          summary.totalEstimateProfit,
+          summary.totalCost,
+        ),
+        totalDayProfit: summary.totalDayProfit,
+        totalDayProfitRate,
       },
     });
   } catch (error) {
@@ -104,12 +163,18 @@ export async function POST(req: NextRequest) {
         type: fundInfo.type,
         nav: fundInfo.nav,
         navDate: fundInfo.navDate ? new Date(fundInfo.navDate) : null,
+        estimateNav: fundInfo.estimateNav,
+        estimateChangePct: fundInfo.estimateChangePct,
+        estimateTime: fundInfo.estimateTime,
       },
       update: {
         name: fundName?.trim() || fundInfo.name,
         type: fundInfo.type ?? undefined,
         nav: fundInfo.nav ?? undefined,
         navDate: fundInfo.navDate ? new Date(fundInfo.navDate) : undefined,
+        estimateNav: fundInfo.estimateNav ?? undefined,
+        estimateChangePct: fundInfo.estimateChangePct ?? undefined,
+        estimateTime: fundInfo.estimateTime ?? undefined,
       },
     });
 

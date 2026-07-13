@@ -2,8 +2,16 @@ export type EastMoneyFundInfo = {
   code: string;
   name: string;
   type?: string;
+  /** 最新单位净值 dwjz */
   nav?: number;
+  /** 单位净值日期 jzrq */
   navDate?: string;
+  /** 实时估值 gsz */
+  estimateNav?: number;
+  /** 估算涨跌幅 %，如 -3.43 */
+  estimateChangePct?: number;
+  /** 估值时间 gztime，如 2026-07-13 15:00 */
+  estimateTime?: string;
 };
 
 function extractJsonp(text: string): unknown {
@@ -13,6 +21,12 @@ function extractJsonp(text: string): unknown {
     throw new Error("净值接口返回格式异常");
   }
   return JSON.parse(text.slice(start, end + 1));
+}
+
+function toNum(raw: string | undefined): number | undefined {
+  if (raw == null || raw === "") return undefined;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : undefined;
 }
 
 export async function fetchFundFromEastMoney(
@@ -47,17 +61,24 @@ export async function fetchFundFromEastMoney(
     name?: string;
     gsz?: string;
     dwjz?: string;
+    gszzl?: string;
     jzrq?: string;
+    gztime?: string;
   };
 
-  const navRaw = data.gsz || data.dwjz;
-  const nav = navRaw ? Number(navRaw) : undefined;
+  // 单位净值与估值分开：不再用 gsz 覆盖 nav
+  const nav = toNum(data.dwjz);
+  const estimateNav = toNum(data.gsz);
+  const estimateChangePct = toNum(data.gszzl);
 
   return {
     code: data.fundcode ?? normalized,
     name: data.name ?? normalized,
-    nav: Number.isFinite(nav) ? nav : undefined,
+    nav,
     navDate: data.jzrq,
+    estimateNav,
+    estimateChangePct,
+    estimateTime: data.gztime,
   };
 }
 
@@ -83,7 +104,11 @@ export async function searchFundsFromEastMoney(keyword: string) {
 
   const text = await res.text();
   const data = JSON.parse(text) as {
-    Datas?: Array<{ CODE?: string; NAME?: string; FundBaseInfo?: { FTYPE?: string } }>;
+    Datas?: Array<{
+      CODE?: string;
+      NAME?: string;
+      FundBaseInfo?: { FTYPE?: string };
+    }>;
   };
 
   return (data.Datas ?? [])

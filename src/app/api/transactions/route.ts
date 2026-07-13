@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { fail, ok, toErrorMessage, unauthorized } from "@/lib/api";
 import { transactionCreateSchema } from "@/lib/validators";
-import { applyBuy, applySell } from "@/lib/finance";
+import { applyTransactionEffect } from "@/lib/finance";
 
 export async function GET(req: NextRequest) {
   try {
@@ -47,19 +47,16 @@ export async function POST(req: NextRequest) {
       return fail("持仓不存在", 404);
     }
 
-    const netAmount = type === "SELL" ? amount - fee : amount + fee;
-    let nextShares = holding.shares;
-    let nextCost = holding.costAmount;
-
-    if (type === "BUY" || type === "SIP") {
-      const result = applyBuy(holding.shares, holding.costAmount, shares, netAmount);
-      nextShares = result.shares;
-      nextCost = result.costAmount;
-    } else {
-      const result = applySell(holding.shares, holding.costAmount, shares);
-      nextShares = result.shares;
-      nextCost = result.costAmount;
-    }
+    const result = applyTransactionEffect(
+      holding.shares,
+      holding.costAmount,
+      type,
+      shares,
+      amount,
+      fee,
+    );
+    const nextShares = result.shares;
+    const nextCost = result.costAmount;
 
     const [transaction] = await prisma.$transaction([
       prisma.transaction.create({

@@ -1,11 +1,16 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
-import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { PlusIcon, Trash2Icon, SearchIcon } from "lucide-react"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { PlusIcon, Trash2Icon, PencilIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 type Holding = {
@@ -15,18 +20,85 @@ type Holding = {
   marketValue: number
   profit: number
   profitRate: number
+  estimateValue: number
+  estimateProfit: number
+  estimateProfitRate: number
+  dayProfit: number | null
+  dayProfitRate: number | null
   note: string | null
-  fund: { code: string; name: string; nav: number | null }
+  fund: {
+    code: string
+    name: string
+    nav: number | null
+    estimateNav: number | null
+    estimateChangePct: number | null
+  }
+}
+
+const emptyAdd = { fundCode: "", fundName: "", shares: "", costPrice: "" }
+
+function fmt(v: number) {
+  return v.toLocaleString("zh-CN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+}
+
+function fmtPct(rate: number | null | undefined) {
+  if (rate == null) return "—"
+  const sign = rate > 0 ? "+" : ""
+  return `${sign}${(rate * 100).toFixed(2)}%`
+}
+
+function tone(v: number | null | undefined) {
+  if (v == null || v === 0) return "text-muted-foreground"
+  return v > 0
+    ? "text-emerald-600 dark:text-emerald-400"
+    : "text-red-600 dark:text-red-400"
+}
+
+function signedMoney(amount: number | null) {
+  if (amount == null) return "—"
+  const sign = amount > 0 ? "+" : ""
+  return `${sign}${fmt(amount)}`
+}
+
+function MiniMetric({
+  label,
+  value,
+  valueClassName,
+}: {
+  label: string
+  value: string
+  valueClassName?: string
+}) {
+  return (
+    <div className="min-w-0 text-center">
+      <p className="text-[11px] text-muted-foreground">{label}</p>
+      <p
+        className={cn(
+          "mt-1 truncate text-xs font-medium tabular-nums tracking-tight",
+          valueClassName,
+        )}
+      >
+        {value}
+      </p>
+    </div>
+  )
 }
 
 export default function HoldingsPage() {
   const [holdings, setHoldings] = useState<Holding[]>([])
   const [loading, setLoading] = useState(true)
-  const [open, setOpen] = useState(false)
-  const [fundCode, setFundCode] = useState("")
-  const [fundName, setFundName] = useState("")
-  const [shares, setShares] = useState("")
-  const [costPrice, setCostPrice] = useState("")
+  const [addOpen, setAddOpen] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
+  const [editing, setEditing] = useState<Holding | null>(null)
+  const [addForm, setAddForm] = useState(emptyAdd)
+  const [editForm, setEditForm] = useState({
+    shares: "",
+    costPrice: "",
+    note: "",
+  })
   const [error, setError] = useState("")
   const [submitting, setSubmitting] = useState(false)
 
@@ -42,7 +114,9 @@ export default function HoldingsPage() {
     }
   }, [])
 
-  useEffect(() => { fetchHoldings() }, [fetchHoldings])
+  useEffect(() => {
+    fetchHoldings()
+  }, [fetchHoldings])
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault()
@@ -53,19 +127,18 @@ export default function HoldingsPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          fundCode: fundCode.trim(),
-          fundName: fundName.trim() || undefined,
-          shares: shares ? parseFloat(shares) : undefined,
-          costPrice: costPrice ? parseFloat(costPrice) : undefined,
+          fundCode: addForm.fundCode.trim(),
+          fundName: addForm.fundName.trim() || undefined,
+          shares: addForm.shares ? parseFloat(addForm.shares) : undefined,
+          costPrice: addForm.costPrice
+            ? parseFloat(addForm.costPrice)
+            : undefined,
         }),
       })
       const d = await r.json()
       if (d.ok) {
-        setOpen(false)
-        setFundCode("")
-        setFundName("")
-        setShares("")
-        setCostPrice("")
+        setAddOpen(false)
+        setAddForm(emptyAdd)
         await fetchHoldings()
       } else {
         setError(d.error || "添加失败")
@@ -77,8 +150,52 @@ export default function HoldingsPage() {
     }
   }
 
+  function openEdit(h: Holding) {
+    setEditing(h)
+    const costPrice = h.shares > 0 ? h.costAmount / h.shares : 0
+    setEditForm({
+      shares: String(h.shares),
+      costPrice: costPrice ? costPrice.toFixed(4) : "",
+      note: h.note ?? "",
+    })
+    setError("")
+    setEditOpen(true)
+  }
+
+  async function handleEdit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!editing) return
+    setError("")
+    setSubmitting(true)
+    try {
+      const r = await fetch(`/api/holdings/${editing.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          shares: parseFloat(editForm.shares),
+          costPrice: editForm.costPrice
+            ? parseFloat(editForm.costPrice)
+            : undefined,
+          note: editForm.note.trim() ? editForm.note.trim() : null,
+        }),
+      })
+      const d = await r.json()
+      if (d.ok) {
+        setEditOpen(false)
+        setEditing(null)
+        await fetchHoldings()
+      } else {
+        setError(d.error || "保存失败")
+      }
+    } catch {
+      setError("网络错误")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   async function handleDelete(id: string) {
-    if (!confirm("确定删除该持仓？")) return
+    if (!confirm("确定删除该持仓？相关交易记录也会删除。")) return
     const r = await fetch(`/api/holdings/${id}`, { method: "DELETE" })
     if (r.ok) {
       await fetchHoldings()
@@ -86,17 +203,35 @@ export default function HoldingsPage() {
   }
 
   if (loading) {
-    return <div className="flex flex-1 items-center justify-center p-6 text-muted-foreground">加载中...</div>
+    return (
+      <div className="flex flex-1 items-center justify-center p-8">
+        <p className="text-sm text-muted-foreground">加载中…</p>
+      </div>
+    )
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-4 p-4 md:p-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">持仓管理</h1>
-        <Dialog open={open} onOpenChange={setOpen}>
+    <div className="mx-auto w-full max-w-xl px-5 py-8 sm:px-6 sm:py-10">
+      {/* Header — same rhythm as watchlist */}
+      <div className="mb-6 flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-base font-semibold tracking-tight">持仓</h1>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {holdings.length > 0
+              ? `${holdings.length} 只基金`
+              : "添加基金开始记账"}
+          </p>
+        </div>
+        <Dialog
+          open={addOpen}
+          onOpenChange={(o) => {
+            setAddOpen(o)
+            if (!o) setError("")
+          }}
+        >
           <DialogTrigger render={<Button size="sm" />}>
             <PlusIcon className="mr-1 size-3.5" />
-            添加持仓
+            添加
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
@@ -107,8 +242,10 @@ export default function HoldingsPage() {
                 <label className="text-sm font-medium">基金代码</label>
                 <Input
                   placeholder="6 位数字，如 000001"
-                  value={fundCode}
-                  onChange={(e) => setFundCode(e.target.value)}
+                  value={addForm.fundCode}
+                  onChange={(e) =>
+                    setAddForm({ ...addForm, fundCode: e.target.value })
+                  }
                   required
                   maxLength={6}
                 />
@@ -117,8 +254,10 @@ export default function HoldingsPage() {
                 <label className="text-sm font-medium">基金名称（可选）</label>
                 <Input
                   placeholder="自动拉取失败时备用"
-                  value={fundName}
-                  onChange={(e) => setFundName(e.target.value)}
+                  value={addForm.fundName}
+                  onChange={(e) =>
+                    setAddForm({ ...addForm, fundName: e.target.value })
+                  }
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -129,8 +268,10 @@ export default function HoldingsPage() {
                     step="0.01"
                     min="0"
                     placeholder="如 198.64"
-                    value={shares}
-                    onChange={(e) => setShares(e.target.value)}
+                    value={addForm.shares}
+                    onChange={(e) =>
+                      setAddForm({ ...addForm, shares: e.target.value })
+                    }
                   />
                 </div>
                 <div className="space-y-2">
@@ -140,14 +281,20 @@ export default function HoldingsPage() {
                     step="0.0001"
                     min="0"
                     placeholder="如 1.7987"
-                    value={costPrice}
-                    onChange={(e) => setCostPrice(e.target.value)}
+                    value={addForm.costPrice}
+                    onChange={(e) =>
+                      setAddForm({ ...addForm, costPrice: e.target.value })
+                    }
                   />
                 </div>
               </div>
-              {shares && costPrice && (
+              {addForm.shares && addForm.costPrice && (
                 <p className="text-xs text-muted-foreground">
-                  总成本 ≈ ¥{(parseFloat(shares) * parseFloat(costPrice) || 0).toFixed(2)}
+                  总成本 ≈ ¥
+                  {(
+                    parseFloat(addForm.shares) * parseFloat(addForm.costPrice) ||
+                    0
+                  ).toFixed(2)}
                 </p>
               )}
               {error && <p className="text-xs text-red-500">{error}</p>}
@@ -159,58 +306,194 @@ export default function HoldingsPage() {
         </Dialog>
       </div>
 
-      <Card>
-        <CardContent className="p-0">
-          {holdings.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 py-16 text-center">
-              <SearchIcon className="size-10 text-muted-foreground/30" />
-              <p className="text-sm text-muted-foreground">暂无持仓，点击「添加持仓」开始</p>
+      {/* Edit dialog */}
+      <Dialog
+        open={editOpen}
+        onOpenChange={(o) => {
+          setEditOpen(o)
+          if (!o) {
+            setEditing(null)
+            setError("")
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              编辑持仓
+              {editing ? ` · ${editing.fund.name}` : ""}
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleEdit} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">持仓份额</label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={editForm.shares}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, shares: e.target.value })
+                  }
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">成本价</label>
+                <Input
+                  type="number"
+                  step="0.0001"
+                  min="0"
+                  value={editForm.costPrice}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, costPrice: e.target.value })
+                  }
+                  required
+                />
+              </div>
             </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-muted-foreground">
-                    <th className="px-4 py-3 text-left font-medium">基金</th>
-                    <th className="px-4 py-3 text-right font-medium">份额</th>
-                    <th className="px-4 py-3 text-right font-medium">净值</th>
-                    <th className="px-4 py-3 text-right font-medium">成本</th>
-                    <th className="px-4 py-3 text-right font-medium">市值</th>
-                    <th className="px-4 py-3 text-right font-medium">盈亏</th>
-                    <th className="px-4 py-3 text-right font-medium">收益率</th>
-                    <th className="w-10" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {holdings.map((h) => (
-                    <tr key={h.id} className="border-b last:border-0 hover:bg-muted/50">
-                      <td className="px-4 py-3">
-                        <p className="font-medium">{h.fund.name}</p>
-                        <p className="text-xs text-muted-foreground">{h.fund.code}</p>
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums">{h.shares.toFixed(2)}</td>
-                      <td className="px-4 py-3 text-right tabular-nums">{h.fund.nav?.toFixed(4) ?? "-"}</td>
-                      <td className="px-4 py-3 text-right tabular-nums">¥{h.costAmount.toFixed(2)}</td>
-                      <td className="px-4 py-3 text-right tabular-nums">¥{h.marketValue.toFixed(2)}</td>
-                      <td className={cn("px-4 py-3 text-right tabular-nums font-medium", h.profit >= 0 ? "text-emerald-600" : "text-red-600")}>
-                        {h.profit >= 0 ? "+" : ""}¥{h.profit.toFixed(2)}
-                      </td>
-                      <td className={cn("px-4 py-3 text-right tabular-nums font-medium", h.profitRate >= 0 ? "text-emerald-600" : "text-red-600")}>
-                        {(h.profitRate * 100).toFixed(2)}%
-                      </td>
-                      <td className="px-2 py-3">
-                        <Button variant="ghost" size="icon-xs" onClick={() => handleDelete(h.id)}>
-                          <Trash2Icon className="size-3.5 text-muted-foreground hover:text-red-500" />
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            {editForm.shares && editForm.costPrice && (
+              <p className="text-xs text-muted-foreground">
+                总成本 ≈ ¥
+                {(
+                  parseFloat(editForm.shares) * parseFloat(editForm.costPrice) ||
+                  0
+                ).toFixed(2)}
+              </p>
+            )}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">备注</label>
+              <Input
+                placeholder="可选"
+                value={editForm.note}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, note: e.target.value })
+                }
+              />
             </div>
-          )}
-        </CardContent>
-      </Card>
+            {error && <p className="text-xs text-red-500">{error}</p>}
+            <Button type="submit" className="w-full" disabled={submitting}>
+              保存
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* List */}
+      {holdings.length === 0 ? (
+        <div className="rounded-xl border border-dashed py-16 text-center">
+          <p className="text-sm text-muted-foreground">暂无持仓</p>
+          <button
+            type="button"
+            onClick={() => setAddOpen(true)}
+            className="mt-2 text-sm text-foreground/80 transition-colors hover:text-foreground"
+          >
+            添加第一只基金
+          </button>
+        </div>
+      ) : (
+        <ul className="divide-y overflow-hidden rounded-xl border">
+          {holdings.map((h) => {
+            const value = h.estimateValue || h.marketValue
+            const profit = h.estimateProfit ?? h.profit
+            const profitRate = h.estimateProfitRate ?? h.profitRate
+            const dp = h.dayProfit
+            const dpr = h.dayProfitRate
+            const costPrice = h.shares > 0 ? h.costAmount / h.shares : 0
+
+            return (
+              <li key={h.id} className="px-4 py-4 sm:px-5">
+                {/* Primary row — same as dashboard / watchlist */}
+                <div className="flex items-baseline justify-between gap-6">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium leading-snug">
+                      {h.fund.name}
+                    </p>
+                    <p className="mt-1 text-xs tabular-nums text-muted-foreground">
+                      {h.fund.code}
+                      <span className="mx-1.5 opacity-40">·</span>
+                      {fmt(h.shares)} 份
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="text-sm font-medium tabular-nums tracking-tight">
+                      {fmt(value)}
+                    </p>
+                    <p className={cn("mt-1 text-xs tabular-nums", tone(dp))}>
+                      {dp != null ? (
+                        <>
+                          {signedMoney(dp)}
+                          {dpr != null && (
+                            <span className="ml-1.5">{fmtPct(dpr)}</span>
+                          )}
+                        </>
+                      ) : (
+                        "—"
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Secondary metrics — same strip language as dashboard */}
+                <div className="mt-3 grid grid-cols-3 divide-x rounded-lg bg-muted/40 py-2.5">
+                  <MiniMetric
+                    label="成本"
+                    value={
+                      costPrice > 0
+                        ? `${fmt(h.costAmount)}`
+                        : fmt(h.costAmount)
+                    }
+                  />
+                  <MiniMetric
+                    label="累计"
+                    value={signedMoney(profit)}
+                    valueClassName={tone(profit)}
+                  />
+                  <MiniMetric
+                    label="收益率"
+                    value={fmtPct(profitRate)}
+                    valueClassName={tone(profitRate)}
+                  />
+                </div>
+
+                {/* Footer: note + actions, not competing with numbers */}
+                <div className="mt-2.5 flex items-center justify-between gap-3">
+                  <p className="min-w-0 truncate text-xs text-muted-foreground">
+                    {h.note ? (
+                      h.note
+                    ) : costPrice > 0 ? (
+                      <>成本价 {costPrice.toFixed(4)}</>
+                    ) : (
+                      <span className="opacity-0">—</span>
+                    )}
+                  </p>
+                  <div className="flex shrink-0 items-center gap-0.5">
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      onClick={() => openEdit(h)}
+                      title="编辑"
+                      className="text-muted-foreground"
+                    >
+                      <PencilIcon className="size-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      onClick={() => handleDelete(h.id)}
+                      title="删除"
+                      className="text-muted-foreground hover:text-red-500"
+                    >
+                      <Trash2Icon className="size-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              </li>
+            )
+          })}
+        </ul>
+      )}
     </div>
   )
 }

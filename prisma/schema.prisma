@@ -8,28 +8,36 @@ datasource db {
 }
 
 model User {
-  id           String         @id @default(cuid())
-  email        String         @unique
+  id           String           @id @default(cuid())
+  email        String           @unique
   name         String?
   passwordHash String
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
   holdings     Holding[]
   transactions Transaction[]
-  sipPlans     SipPlan[]
+  watchlist    WatchlistItem[]
 }
 
 model Fund {
-  id        String     @id @default(cuid())
-  code      String     @unique
-  name      String
-  type      String?
-  nav       Float?
-  navDate   DateTime?
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  holdings  Holding[]
-  navHistory NavHistory[]
+  id                 String          @id @default(cuid())
+  code               String          @unique
+  name               String
+  type               String?
+  /** 最新单位净值 dwjz */
+  nav                Float?
+  navDate            DateTime?
+  /** 实时/盘中估值 gsz */
+  estimateNav        Float?
+  /** 估算涨跌幅 %（如 -3.43） */
+  estimateChangePct  Float?
+  /** 估值时间原文 gztime */
+  estimateTime       String?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  holdings           Holding[]
+  navHistory         NavHistory[]
+  watchlistItems     WatchlistItem[]
 }
 
 model Holding {
@@ -44,7 +52,6 @@ model Holding {
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   fund         Fund          @relation(fields: [fundId], references: [id], onDelete: Cascade)
   transactions Transaction[]
-  sipPlans     SipPlan[]
 
   @@unique([userId, fundId])
   @@index([userId])
@@ -70,24 +77,6 @@ model Transaction {
   @@index([tradeDate])
 }
 
-model SipPlan {
-  id          String    @id @default(cuid())
-  userId      String
-  holdingId   String
-  amount      Float
-  dayOfMonth  Int
-  enabled     Boolean   @default(true)
-  note        String?
-  lastRunDate DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  holding     Holding   @relation(fields: [holdingId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([holdingId])
-}
-
 model NavHistory {
   id     String   @id @default(cuid())
   fundId String
@@ -97,4 +86,20 @@ model NavHistory {
 
   @@unique([fundId, date])
   @@index([fundId])
+}
+
+/** 自选：只关注行情，不计入资产与成本 */
+model WatchlistItem {
+  id        String   @id @default(cuid())
+  userId    String
+  fundId    String
+  note      String?
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fund      Fund     @relation(fields: [fundId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, fundId])
+  @@index([userId])
 }

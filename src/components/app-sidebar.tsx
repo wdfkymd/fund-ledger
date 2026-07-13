@@ -19,27 +19,32 @@ import {
   LayoutDashboardIcon,
   WalletIcon,
   ArrowLeftRightIcon,
-  TargetIcon,
   SettingsIcon,
-  LifeBuoyIcon,
-  TrendingUpIcon,
   LandmarkIcon,
+  StarIcon,
+  ChartColumnIcon,
 } from "lucide-react"
 
-const navDaily = [
+/** 一眼看结果 */
+const navOverview = [
   { title: "总览", url: "/dashboard", icon: <LayoutDashboardIcon /> },
+  { title: "收益", url: "/analytics", icon: <ChartColumnIcon /> },
+]
+
+/** 管仓与关注 */
+const navAssets = [
   { title: "持仓", url: "/holdings", icon: <WalletIcon /> },
+  { title: "自选", url: "/watchlist", icon: <StarIcon /> },
+]
+
+/** 记账流水 */
+const navRecords = [
   { title: "交易记录", url: "/transactions", icon: <ArrowLeftRightIcon /> },
 ]
 
-const navInsights = [
-  { title: "收益分析", url: "/analytics", icon: <TrendingUpIcon /> },
-  { title: "预算设置", url: "/budgets", icon: <TargetIcon /> },
-]
-
-const navSecondary = [
+/** 账号与偏好 */
+const navSystem = [
   { title: "设置", url: "/settings", icon: <SettingsIcon /> },
-  { title: "帮助与支持", url: "/support", icon: <LifeBuoyIcon /> },
 ]
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
@@ -66,9 +71,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={navDaily} label="常用" />
-        <NavMain items={navInsights} label="分析" />
-        <NavSecondary items={navSecondary} className="mt-auto" />
+        <NavMain items={navOverview} label="概览" />
+        <NavMain items={navAssets} label="资产" />
+        <NavMain items={navRecords} label="记录" />
+        <NavSecondary items={navSystem} label="系统" className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
         <NavUser />

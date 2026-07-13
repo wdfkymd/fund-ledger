@@ -14,6 +14,7 @@ import {
 export function NavMain({
   items,
   label,
+  className,
 }: {
   label?: string
   items: {
@@ -21,27 +22,33 @@ export function NavMain({
     url: string
     icon: React.ReactNode
   }[]
+  className?: string
 }) {
   const pathname = usePathname()
 
   return (
-    <SidebarGroup>
+    <SidebarGroup className={className}>
       {label && <SidebarGroupLabel>{label}</SidebarGroupLabel>}
       <SidebarMenu>
-        {items.map((item) => (
-          <SidebarMenuItem key={item.title}>
-            <Link
-              href={item.url}
-              className={cn(
-                sidebarMenuButtonVariants({ size: "default" }),
-                pathname === item.url && "bg-sidebar-accent font-medium text-sidebar-accent-foreground",
-              )}
-            >
-              {item.icon}
-              <span>{item.title}</span>
-            </Link>
-          </SidebarMenuItem>
-        ))}
+        {items.map((item) => {
+          const active =
+            pathname === item.url || pathname.startsWith(`${item.url}/`)
+          return (
+            <SidebarMenuItem key={item.title}>
+              <Link
+                href={item.url}
+                className={cn(
+                  sidebarMenuButtonVariants({ size: "default" }),
+                  active &&
+                    "bg-sidebar-accent font-medium text-sidebar-accent-foreground",
+                )}
+              >
+                {item.icon}
+                <span>{item.title}</span>
+              </Link>
+            </SidebarMenuItem>
+          )
+        })}
       </SidebarMenu>
     </SidebarGroup>
   )

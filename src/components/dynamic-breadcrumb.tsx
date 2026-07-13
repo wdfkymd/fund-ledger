@@ -14,14 +14,12 @@ import {
 const labelMap: Record<string, string> = {
   dashboard: "总览",
   holdings: "持仓",
+  watchlist: "自选",
   transactions: "交易记录",
-  analytics: "收益分析",
-  budgets: "预算设置",
+  analytics: "收益",
   settings: "设置",
-  notifications: "通知",
   "sign-in": "登录",
   "sign-up": "注册",
-  support: "帮助与支持",
 }
 
 export function DynamicBreadcrumb() {

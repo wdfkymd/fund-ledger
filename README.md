@@ -1,72 +1,97 @@
 # 基金记账 fund-ledger
 
+个人自用的基金持仓与交易记账。
+
 ## 技术栈
+
 - Next.js (App Router) + TypeScript
 - Prisma + SQLite (`better-sqlite3` adapter)
 - Zod 校验
 - JWT Cookie 会话（jose + bcryptjs）
 - 天天基金公开接口拉取净值
 
-## 已实现后端能力
+## 产品边界
+
+- **做**：注册登录、持仓、自选、交易（买入/卖出/定投）、净值刷新、收益汇总
+- **不做**：券商交易、自动下单、多用户协作
+- **定投**：交易类型 `SIP`，不是独立定时计划
+- **自选**：关注行情，不计入资产；可与持仓重叠
+
+## API
+
 ### 鉴权
-- `POST /api/auth/register` 注册
-- `POST /api/auth/login` 登录
-- `POST /api/auth/logout` 退出
+
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `POST /api/auth/logout`
 - `GET /api/auth/me` 当前用户
+- `PATCH /api/auth/me` 更新昵称 `{ name }`
+- `POST /api/auth/password` 修改密码 `{ currentPassword, newPassword, confirmPassword }`
 
 ### 持仓
-- `GET /api/holdings` 持仓列表 + 汇总
-- `POST /api/holdings` 添加持仓（自动拉基金信息）
-- `GET /api/holdings/:id` 持仓详情
-- `DELETE /api/holdings/:id` 删除持仓
 
-### 交易（加仓/减仓）
+- `GET /api/holdings` 列表 + 汇总
+- `POST /api/holdings` 添加（自动拉基金信息）
+- `GET /api/holdings/:id` 详情
+- `PATCH /api/holdings/:id` 编辑份额/成本/备注
+- `DELETE /api/holdings/:id` 删除
+
+### 交易
+
 - `GET /api/transactions?holdingId=`
 - `POST /api/transactions` type: `BUY | SELL | SIP`
+- `PATCH /api/transactions/:id` 编辑（先冲销旧记录再应用新值）
+- `DELETE /api/transactions/:id` 删除并回滚持仓
 
-### 定投
-- `GET /api/sip-plans`
-- `POST /api/sip-plans`
-- `PATCH /api/sip-plans` body 带 `id`
-- `DELETE /api/sip-plans/:id`
-- `POST /api/sip-plans/run` 执行到期定投
-  - 登录用户：只跑自己的计划
-  - Header `x-cron-secret: $CRON_SECRET`：可跑全部用户（给 cron 用）
-  - body 可选 `{ "force": true }` 强制执行（忽略本月已执行/未到日）
+### 自选
 
-### 基金净值
+- `GET /api/watchlist` 列表（含是否已持有）
+- `POST /api/watchlist` 添加 `{ fundCode, fundName?, note? }`
+- `DELETE /api/watchlist/:id` 移除（不影响持仓）
+
+### 基金净值 / 估值
+
 - `GET /api/funds?q=` 搜索
-- `GET /api/funds?code=` 查单只
-- `POST /api/funds` 刷新当前用户全部持仓净值
+- `GET /api/funds?code=` 查单只（含 `nav` 单位净值 + `estimateNav` 实时估值）
+- `POST /api/funds` 刷新当前用户持仓 + 自选基金：写入单位净值与盘中估值（`gsz`/`gszzl`/`gztime`）
 
-### 收益统计
-- `GET /api/stats`
+### 统计 / 收益分析
+
+- `GET /api/stats` 持仓汇总（兼容）
+- `GET /api/analytics` 收益页数据：汇总、资金流水、占比、盈亏排行、近 12 月流水
 
 ## 本地命令
+
 ```bash
+cp .env.example .env   # 填写 AUTH_SECRET
 npm install
 npm run db:push
-npm run dev
+npm run dev            # 开发
+npm run build && npm start
 ```
 
-## 前端
-基于 [shadcn-fintech](https://github.com/abderrahimghazali/shadcn-fintech) 模板构建，使用 shadcn/ui + Tailwind CSS v4。
-- `shadcn/ui` 组件（`@base-ui/react`）
-- `next-themes` 暗色模式切换
-- `recharts` 图表
-- `motion` 动画
-- `lucide-react` 图标
+生产示例（本机）：
+
+```bash
+systemctl --user restart fund-ledger   # 默认 :8000
+```
 
 ## 页面
+
 | 路由 | 功能 |
-|---|---|
-| `/sign-in` | 登录 |
-| `/sign-up` | 注册 |
-| `/dashboard` | 基金总览（持仓汇总 + 收益统计） |
-| `/holdings` | 持仓管理（添加/删除） |
-| `/transactions` | 交易记录（买入/卖出/删除） |
-| `/sip-plans` | 定投计划（创建/执行/删除） |
-| `/settings` | 设置（开发中） |
+|------|------|
+| `/sign-in` `/sign-up` | 登录 / 注册 |
+| `/dashboard` | 总览 |
+| `/holdings` | 持仓（添加/编辑/删除） |
+| `/watchlist` | 自选（添加/移除/刷新估值） |
+| `/transactions` | 交易（记一笔/编辑/删除） |
+| `/analytics` | 收益分析（流水 / 占比 / 排行） |
+| `/settings` | 设置（昵称 / 改密 / 主题 / 退出） |
 
 ## 数据模型
-User / Fund / Holding / Transaction / SipPlan / NavHistory
+
+User / Fund / Holding / WatchlistItem / Transaction / NavHistory
+
+## 内部真源
+
+开发决策与接管记录见 `dev-docs/`（默认不纳入公开交付）。
