@@ -1,114 +1,48 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
+import { animate } from "animejs"
 import { Button } from "@/components/ui/button"
 import { RefreshCwIcon } from "lucide-react"
+import { useCountUp } from "@/hooks/use-count-up"
+import { useDashboardData } from "@/hooks/use-dashboard-data"
+import { usePageEnter } from "@/hooks/use-page-enter"
 import { cn } from "@/lib/utils"
+import { DashboardSkeleton } from "./dashboard-skeleton"
+import {
+  fmt,
+  fmtChg,
+  fmtIndexPrice,
+  fmtNav,
+  fmtPct,
+  signedMoney,
+  tone,
+  TX_LABEL,
+} from "@/lib/format"
+import type { ListTab } from "./types"
 
-type Holding = {
-  id: string
-  shares: number
-  costAmount: number
-  estimateValue: number
-  estimateProfit: number
-  estimateProfitRate: number
-  dayProfit: number | null
-  dayProfitRate: number | null
-  fund: {
-    code: string
-    name: string
-    nav: number | null
-    estimateNav: number | null
-    estimateChangePct: number | null
-    estimateTime: string | null
-  }
+function prefersReducedMotion() {
+  return (
+    typeof window !== "undefined" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  )
 }
 
-type WatchItem = {
-  id: string
-  note: string | null
-  isHeld: boolean
-  fund: {
-    code: string
-    name: string
-    nav: number | null
-    estimateNav: number | null
-    estimateChangePct: number | null
-    estimateTime: string | null
-  }
-}
-
-type Summary = {
-  totalCost: number
-  totalEstimateValue: number
-  totalEstimateProfit: number
-  totalEstimateProfitRate: number
-  totalDayProfit: number | null
-  totalDayProfitRate: number | null
-}
-
-type ListTab = "holdings" | "watchlist"
-
-type MarketIndex = {
-  name: string
-  code: string
-  price: number | null
-  changePct: number | null
-  change: number | null
-}
-
-type RecentTx = {
-  id: string
-  type: string
-  amount: number
-  shares: number
-  tradeDate: string
-  holding: { fund: { name: string; code: string } }
-}
-
-const TX_LABEL: Record<string, string> = {
-  BUY: "买入",
-  SELL: "卖出",
-  SIP: "定投",
-}
-
-function fmt(v: number) {
-  return v.toLocaleString("zh-CN", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+/** 刷新完成后：总资产轻弹一下（克制反馈） */
+function pulseRefreshDone(targets: Array<Element | null>) {
+  if (prefersReducedMotion()) return
+  const els = targets.filter(Boolean) as Element[]
+  if (els.length === 0) return
+  animate(els, {
+    scale: [
+      { to: 1.04, duration: 120, ease: "out(2)" },
+      { to: 1, duration: 220, ease: "out(3)" },
+    ],
   })
 }
 
-function fmtPct(rate: number | null | undefined) {
-  if (rate == null) return "—"
-  const sign = rate > 0 ? "+" : ""
-  return `${sign}${(rate * 100).toFixed(2)}%`
-}
-
-function fmtNav(v: number | null | undefined) {
-  if (v == null) return "—"
-  return v.toFixed(4)
-}
-
-function fmtChg(pct: number | null | undefined) {
-  if (pct == null) return "—"
-  const sign = pct > 0 ? "+" : ""
-  return `${sign}${pct.toFixed(2)}%`
-}
-
-function tone(v: number | null | undefined) {
-  if (v == null || v === 0) return "text-muted-foreground"
-  return v > 0
-    ? "text-emerald-600 dark:text-emerald-400"
-    : "text-red-600 dark:text-red-400"
-}
-
-function signedMoney(amount: number | null) {
-  if (amount == null) return "—"
-  const sign = amount > 0 ? "+" : ""
-  return `${sign}${fmt(amount)}`
-}
+const INDEX_SLOT_COUNT = 4
 
 function MetricCell({
   label,
@@ -134,108 +68,55 @@ function MetricCell({
   )
 }
 
-function fmtIndexPrice(v: number | null) {
-  if (v == null) return "—"
-  return v.toLocaleString("zh-CN", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
-}
-
 export function DashboardClient() {
-  const [holdings, setHoldings] = useState<Holding[]>([])
-  const [watchlist, setWatchlist] = useState<WatchItem[]>([])
-  const [recentTxs, setRecentTxs] = useState<RecentTx[]>([])
-  const [summary, setSummary] = useState<Summary | null>(null)
-  const [indices, setIndices] = useState<MarketIndex[]>([])
+  const { status, data, error, refreshing, reload, refreshEstimates } =
+    useDashboardData()
   const [tab, setTab] = useState<ListTab>("holdings")
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [autoRefreshed, setAutoRefreshed] = useState(false)
 
-  const fetchIndices = useCallback(async () => {
-    try {
-      const r = await fetch("/api/market/indices")
-      if (r.ok) {
-        const d = await r.json()
-        setIndices(d.data.indices ?? [])
-      }
-    } catch {
-      // 指数失败不挡主流程
-    }
-  }, [])
+  const ready = status === "ready"
+  const rootRef = usePageEnter(ready)
+  const assetsValue = data.summary?.totalEstimateValue ?? 0
+  const assetsRef = useCountUp<HTMLParagraphElement>(assetsValue, {
+    digits: 2,
+    duration: 480,
+    enabled: ready,
+  })
+  const dayValue = data.summary?.totalDayProfit ?? 0
+  const dayRef = useCountUp<HTMLSpanElement>(dayValue, {
+    digits: 2,
+    duration: 420,
+    enabled: ready && data.summary?.totalDayProfit != null,
+    format: (n) => `今日 ${signedMoney(n)}`,
+  })
+  const refreshBtnRef = useRef<HTMLButtonElement | null>(null)
+  const wasRefreshing = useRef(false)
 
-  const fetchData = useCallback(async () => {
-    try {
-      const [hR, wR, tR] = await Promise.all([
-        fetch("/api/holdings"),
-        fetch("/api/watchlist"),
-        fetch("/api/transactions?limit=5"),
-      ])
-      if (hR.ok) {
-        const d = await hR.json()
-        setHoldings(d.data.holdings)
-        setSummary(d.data.summary)
-      }
-      if (wR.ok) {
-        const d = await wR.json()
-        setWatchlist(d.data.items)
-      }
-      if (tR.ok) {
-        const d = await tR.json()
-        setRecentTxs(Array.isArray(d.data) ? d.data : [])
-      }
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  const handleRefresh = useCallback(
-    async (silent = false) => {
-      if (!silent) setRefreshing(true)
-      try {
-        await Promise.all([
-          fetch("/api/funds", { method: "POST" }),
-          fetchIndices(),
-        ])
-        await fetchData()
-      } finally {
-        if (!silent) setRefreshing(false)
-      }
-    },
-    [fetchData, fetchIndices],
-  )
-
+  // 手动刷新结束：总资产 + 按钮轻 scale 反馈
   useEffect(() => {
-    void fetchData()
-    void fetchIndices()
-  }, [fetchData, fetchIndices])
-
-  useEffect(() => {
-    if (loading || autoRefreshed) return
-    if (holdings.length === 0 && watchlist.length === 0) {
-      setAutoRefreshed(true)
-      return
+    if (wasRefreshing.current && !refreshing && ready) {
+      pulseRefreshDone([assetsRef.current, refreshBtnRef.current])
     }
-    setAutoRefreshed(true)
-    void handleRefresh(true)
-  }, [
-    loading,
-    holdings.length,
-    watchlist.length,
-    autoRefreshed,
-    handleRefresh,
-  ])
+    wasRefreshing.current = refreshing
+  }, [refreshing, ready, assetsRef])
 
-  if (loading) {
+  if (status === "loading") {
+    return <DashboardSkeleton />
+  }
+
+  if (status === "error") {
     return (
-      <div className="flex flex-1 items-center justify-center p-8">
-        <p className="text-sm text-muted-foreground">加载中…</p>
+      <div className="mx-auto flex w-full max-w-xl flex-1 flex-col items-center justify-center gap-3 px-5 py-16 text-center">
+        <p className="text-sm text-muted-foreground">
+          {error ?? "加载失败"}
+        </p>
+        <Button variant="outline" size="sm" onClick={() => void reload()}>
+          重试
+        </Button>
       </div>
     )
   }
 
-  const assets = summary?.totalEstimateValue ?? 0
+  const { holdings, watchlist, recentTxs, summary, indices } = data
   const day = summary?.totalDayProfit ?? null
   const dayRate = summary?.totalDayProfitRate ?? null
   const profit = summary?.totalEstimateProfit ?? 0
@@ -250,46 +131,54 @@ export function DashboardClient() {
   const manageLabel = tab === "holdings" ? "管理持仓" : "管理自选"
 
   return (
-    <div className="mx-auto w-full max-w-xl px-5 py-8 sm:px-6 sm:py-10">
-      {/* Market index strip — slim horizontal scroll */}
-      {indices.length > 0 && (
-        <div className="mb-6 -mx-1">
-          <div
-            className="flex gap-2 overflow-x-auto px-1 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-            style={{ WebkitOverflowScrolling: "touch" }}
-          >
-            {indices.map((idx) => (
-              <div
-                key={idx.code}
-                className="flex shrink-0 items-center gap-2 rounded-full border bg-muted/30 px-3 py-1.5"
-              >
-                <span className="text-[11px] text-muted-foreground whitespace-nowrap">
-                  {idx.name}
-                </span>
-                <span className="text-[11px] font-medium tabular-nums tracking-tight whitespace-nowrap">
-                  {fmtIndexPrice(idx.price)}
-                </span>
-                <span
-                  className={cn(
-                    "text-[11px] tabular-nums whitespace-nowrap",
-                    tone(idx.changePct),
-                  )}
+    <div
+      ref={rootRef}
+      className="mx-auto w-full max-w-xl px-5 py-8 sm:px-6 sm:py-10"
+    >
+      <div className="anime-enter mb-6 -mx-1 min-h-[34px]">
+        <div
+          className="flex gap-2 overflow-x-auto px-1 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          style={{ WebkitOverflowScrolling: "touch" }}
+        >
+          {indices.length > 0
+            ? indices.map((idx) => (
+                <div
+                  key={idx.code}
+                  className="flex h-7 shrink-0 items-center gap-2 rounded-full border bg-muted/30 px-3"
                 >
-                  {fmtChg(idx.changePct)}
-                </span>
-              </div>
-            ))}
-          </div>
+                  <span className="whitespace-nowrap text-[11px] text-muted-foreground">
+                    {idx.name}
+                  </span>
+                  <span className="whitespace-nowrap text-[11px] font-medium tabular-nums tracking-tight">
+                    {fmtIndexPrice(idx.price)}
+                  </span>
+                  <span
+                    className={cn(
+                      "whitespace-nowrap text-[11px] tabular-nums",
+                      tone(idx.changePct),
+                    )}
+                  >
+                    {fmtChg(idx.changePct)}
+                  </span>
+                </div>
+              ))
+            : Array.from({ length: INDEX_SLOT_COUNT }).map((_, i) => (
+                <div
+                  key={i}
+                  className="h-7 w-[5.5rem] shrink-0 rounded-full border border-dashed bg-muted/20"
+                  aria-hidden
+                />
+              ))}
         </div>
-      )}
+      </div>
 
-      {/* Hero — always holdings summary (assets) */}
-      <section className="relative mb-8 text-center">
+      <section className="anime-enter relative mb-8 text-center">
         <div className="absolute right-0 top-0">
           <Button
+            ref={refreshBtnRef}
             variant="ghost"
             size="icon-sm"
-            onClick={() => handleRefresh(false)}
+            onClick={() => void refreshEstimates(true)}
             disabled={refreshing}
             title="刷新估值与指数"
             className="text-muted-foreground"
@@ -300,24 +189,39 @@ export function DashboardClient() {
           </Button>
         </div>
 
-        <p className="text-xs tracking-wide text-muted-foreground">总资产</p>
-        <p className="mt-3 text-[2.25rem] font-semibold leading-none tracking-tight tabular-nums sm:text-[2.75rem]">
-          {fmt(assets)}
+        <p className="text-xs tracking-wide text-muted-foreground">
+          总资产
+          {refreshing && (
+            <span className="ml-1.5 font-normal text-muted-foreground/70">
+              更新中
+            </span>
+          )}
+        </p>
+        <p
+          ref={assetsRef}
+          className="mt-3 origin-center text-[2.25rem] font-semibold leading-none tracking-tight tabular-nums sm:text-[2.75rem]"
+        >
+          {fmt(assetsValue)}
         </p>
 
         <div className="mt-4 space-y-1">
-          <p className={cn("text-sm font-medium tabular-nums", tone(day))}>
-            {day == null ? (
-              "今日 —"
-            ) : (
-              <>
-                今日 {signedMoney(day)}
-                {dayRate != null && (
-                  <span className="ml-1.5 font-normal">{fmtPct(dayRate)}</span>
-                )}
-              </>
-            )}
-          </p>
+          {day == null ? (
+            <p className="text-sm font-medium tabular-nums text-muted-foreground">
+              今日 —
+            </p>
+          ) : (
+            <p
+              className={cn(
+                "text-sm font-medium tabular-nums",
+                tone(day),
+              )}
+            >
+              <span ref={dayRef}>今日 {signedMoney(day)}</span>
+              {dayRate != null && (
+                <span className="ml-1.5 font-normal">{fmtPct(dayRate)}</span>
+              )}
+            </p>
+          )}
           {estimateTime && (
             <p className="text-xs text-muted-foreground/80">
               估值 {estimateTime}
@@ -340,8 +244,7 @@ export function DashboardClient() {
         </div>
       </section>
 
-      {/* List with 持仓 / 自选 toggle */}
-      <section>
+      <section className="anime-enter">
         <div className="mb-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-1 rounded-xl border bg-muted/40 p-1 text-xs">
             <button
@@ -401,7 +304,10 @@ export function DashboardClient() {
                 const dpr = h.dayProfitRate
                 const chg = h.fund.estimateChangePct
                 return (
-                  <li key={h.id} className="px-4 py-3.5 sm:px-5">
+                  <li
+                    key={h.id}
+                    className="anime-list-item px-4 py-3.5 sm:px-5"
+                  >
                     <div className="flex items-baseline justify-between gap-6">
                       <div className="min-w-0">
                         <Link
@@ -486,7 +392,10 @@ export function DashboardClient() {
               const est = item.fund.estimateNav
               const nav = item.fund.nav
               return (
-                <li key={item.id} className="px-4 py-3.5 sm:px-5">
+                <li
+                  key={item.id}
+                  className="anime-list-item px-4 py-3.5 sm:px-5"
+                >
                   <div className="flex items-baseline justify-between gap-6">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
@@ -557,8 +466,7 @@ export function DashboardClient() {
         )}
       </section>
 
-      {/* Recent transactions */}
-      <section className="mt-8">
+      <section className="anime-enter mt-8">
         <div className="mb-3 flex items-center justify-between gap-3">
           <h2 className="text-sm font-medium">最近交易</h2>
           <Link
@@ -584,7 +492,7 @@ export function DashboardClient() {
               const label = TX_LABEL[tx.type] ?? tx.type
               const isSell = tx.type === "SELL"
               return (
-                <li key={tx.id} className="px-4 py-3 sm:px-5">
+                <li key={tx.id} className="anime-list-item px-4 py-3 sm:px-5">
                   <div className="flex items-center justify-between gap-4">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">

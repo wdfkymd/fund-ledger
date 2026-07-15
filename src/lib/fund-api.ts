@@ -38,13 +38,14 @@ export async function fetchFundFromEastMoney(
   }
 
   const url = `https://fundgz.1234567.com.cn/js/${normalized}.js?rt=${Date.now()}`;
+  // 外网东财常慢/超时：单只硬超时 2.5s，避免整页刷新卡 8s+
   const res = await fetch(url, {
     headers: {
       Referer: "https://fund.eastmoney.com/",
       "User-Agent": "Mozilla/5.0",
     },
     cache: "no-store",
-    signal: AbortSignal.timeout(8000),
+    signal: AbortSignal.timeout(2500),
   });
 
   if (!res.ok) {
@@ -95,7 +96,7 @@ export async function searchFundsFromEastMoney(keyword: string) {
       "User-Agent": "Mozilla/5.0",
     },
     cache: "no-store",
-    signal: AbortSignal.timeout(8000),
+    signal: AbortSignal.timeout(3000),
   });
 
   if (!res.ok) {

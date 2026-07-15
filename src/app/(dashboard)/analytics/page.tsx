@@ -15,6 +15,9 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart"
+import { useCountUp } from "@/hooks/use-count-up"
+import { usePageEnter } from "@/hooks/use-page-enter"
+import { fmt, fmtPct, signedMoney, tone } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
 type FundItem = {
@@ -60,32 +63,6 @@ type AnalyticsData = {
     net: number
     count: number
   }[]
-}
-
-function fmt(v: number) {
-  return v.toLocaleString("zh-CN", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
-}
-
-function fmtPct(rate: number | null | undefined) {
-  if (rate == null) return "—"
-  const sign = rate > 0 ? "+" : ""
-  return `${sign}${(rate * 100).toFixed(2)}%`
-}
-
-function tone(v: number | null | undefined) {
-  if (v == null || v === 0) return "text-muted-foreground"
-  return v > 0
-    ? "text-emerald-600 dark:text-emerald-400"
-    : "text-red-600 dark:text-red-400"
-}
-
-function signedMoney(amount: number | null) {
-  if (amount == null) return "—"
-  const sign = amount > 0 ? "+" : ""
-  return `${sign}${fmt(amount)}`
 }
 
 function MetricCell({
@@ -150,6 +127,16 @@ export default function AnalyticsPage() {
     return data.monthly.some((m) => m.invest > 0 || m.redeem > 0)
   }, [data])
 
+  const ready = !loading && data != null
+  const rootRef = usePageEnter(ready)
+  const profitValue = data?.summary.totalEstimateProfit ?? 0
+  const profitRef = useCountUp<HTMLParagraphElement>(profitValue, {
+    digits: 2,
+    duration: 480,
+    enabled: ready,
+    format: signedMoney,
+  })
+
   if (loading) {
     return (
       <div className="flex flex-1 items-center justify-center p-8">
@@ -170,11 +157,15 @@ export default function AnalyticsPage() {
   const empty = summary.holdingCount === 0 && summary.transactionCount === 0
 
   return (
-    <div className="mx-auto w-full max-w-xl px-5 py-8 sm:px-6 sm:py-10">
+    <div
+      ref={rootRef}
+      className="mx-auto w-full max-w-xl px-5 py-8 sm:px-6 sm:py-10"
+    >
       {/* Header */}
-      <div className="mb-8 text-center">
+      <div className="anime-enter mb-8 text-center">
         <p className="text-xs tracking-wide text-muted-foreground">累计盈亏</p>
         <p
+          ref={profitRef}
           className={cn(
             "mt-3 text-[2.25rem] font-semibold leading-none tracking-tight tabular-nums sm:text-[2.75rem]",
             tone(summary.totalEstimateProfit),
@@ -214,7 +205,7 @@ export default function AnalyticsPage() {
       </div>
 
       {empty ? (
-        <div className="rounded-xl border border-dashed py-16 text-center">
+        <div className="anime-enter rounded-xl border border-dashed py-16 text-center">
           <p className="text-sm text-muted-foreground">暂无数据可分析</p>
           <Link
             href="/holdings"
@@ -226,7 +217,7 @@ export default function AnalyticsPage() {
       ) : (
         <div className="space-y-8">
           {/* Cash flow summary */}
-          <section>
+          <section className="anime-enter">
             <div className="mb-2.5 flex items-center justify-between px-0.5">
               <h2 className="text-xs tracking-wide text-muted-foreground">
                 资金流水
@@ -286,7 +277,7 @@ export default function AnalyticsPage() {
           </section>
 
           {/* Monthly chart */}
-          <section>
+          <section className="anime-enter">
             <div className="mb-2.5 px-0.5">
               <h2 className="text-xs tracking-wide text-muted-foreground">
                 近 12 个月流水
@@ -371,7 +362,7 @@ export default function AnalyticsPage() {
           </section>
 
           {/* Allocation */}
-          <section>
+          <section className="anime-enter">
             <div className="mb-2.5 flex items-center justify-between px-0.5">
               <h2 className="text-xs tracking-wide text-muted-foreground">
                 持仓占比
@@ -391,21 +382,21 @@ export default function AnalyticsPage() {
               <ul className="divide-y overflow-hidden rounded-xl border">
                 {byWeight.map((item) => (
                   <li key={item.holdingId} className="px-4 py-3.5 sm:px-5">
-                    <div className="flex items-baseline justify-between gap-4">
-                      <div className="min-w-0">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1 overflow-hidden">
                         <Link
                           href={`/funds/${item.fundCode}`}
-                          className="truncate text-sm font-medium leading-snug transition-colors hover:text-foreground/80"
+                          className="block truncate text-sm font-medium leading-snug transition-colors hover:text-foreground/80"
                         >
                           {item.fundName}
                         </Link>
-                        <p className="mt-1 text-xs tabular-nums text-muted-foreground">
+                        <p className="mt-1 truncate text-xs tabular-nums text-muted-foreground">
                           {item.fundCode}
                           <span className="mx-1.5 opacity-40">·</span>
                           {(item.weight * 100).toFixed(1)}%
                         </p>
                       </div>
-                      <p className="shrink-0 text-sm font-medium tabular-nums tracking-tight">
+                      <p className="shrink-0 pt-0.5 text-right text-sm font-medium tabular-nums tracking-tight">
                         {fmt(item.estimateValue)}
                       </p>
                     </div>
@@ -424,7 +415,7 @@ export default function AnalyticsPage() {
           </section>
 
           {/* Profit ranking */}
-          <section>
+          <section className="anime-enter">
             <div className="mb-2.5 px-0.5">
               <h2 className="text-xs tracking-wide text-muted-foreground">
                 盈亏排行
@@ -438,20 +429,20 @@ export default function AnalyticsPage() {
               <ul className="divide-y overflow-hidden rounded-xl border">
                 {byProfit.map((item, idx) => (
                   <li key={item.holdingId} className="px-4 py-3.5 sm:px-5">
-                    <div className="flex items-baseline justify-between gap-6">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium leading-snug">
-                          <span className="mr-2 text-xs tabular-nums text-muted-foreground">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1 overflow-hidden">
+                        <div className="flex min-w-0 items-baseline gap-2">
+                          <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
                             {idx + 1}
                           </span>
                           <Link
                             href={`/funds/${item.fundCode}`}
-                            className="transition-colors hover:text-foreground/80"
+                            className="min-w-0 truncate text-sm font-medium leading-snug transition-colors hover:text-foreground/80"
                           >
                             {item.fundName}
                           </Link>
-                        </p>
-                        <p className="mt-1 text-xs tabular-nums text-muted-foreground">
+                        </div>
+                        <p className="mt-1 truncate text-xs tabular-nums text-muted-foreground">
                           成本 {fmt(item.costAmount)}
                           <span className="mx-1.5 opacity-40">·</span>
                           估值 {fmt(item.estimateValue)}

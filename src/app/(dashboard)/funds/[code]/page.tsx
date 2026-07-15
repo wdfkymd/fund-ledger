@@ -18,6 +18,16 @@ import {
 } from "@/components/ui/chart"
 import { Button } from "@/components/ui/button"
 import { RefreshCwIcon, ArrowLeftIcon } from "lucide-react"
+import { usePageEnter } from "@/hooks/use-page-enter"
+import {
+  fmt,
+  fmtChg,
+  fmtNav,
+  fmtPct,
+  signedMoney,
+  tone,
+  TX_LABEL,
+} from "@/lib/format"
 import { cn } from "@/lib/utils"
 
 type FundDetail = {
@@ -56,49 +66,6 @@ type FundDetail = {
     note: string | null
   }[]
   liveError: string | null
-}
-
-const TYPE_LABEL: Record<string, string> = {
-  BUY: "买入",
-  SELL: "卖出",
-  SIP: "定投",
-}
-
-function fmt(v: number) {
-  return v.toLocaleString("zh-CN", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
-}
-
-function fmtNav(v: number | null | undefined) {
-  if (v == null) return "—"
-  return v.toFixed(4)
-}
-
-function fmtPct(rate: number | null | undefined) {
-  if (rate == null) return "—"
-  const sign = rate > 0 ? "+" : ""
-  return `${sign}${(rate * 100).toFixed(2)}%`
-}
-
-function fmtChg(pct: number | null | undefined) {
-  if (pct == null) return "—"
-  const sign = pct > 0 ? "+" : ""
-  return `${sign}${pct.toFixed(2)}%`
-}
-
-function tone(v: number | null | undefined) {
-  if (v == null || v === 0) return "text-muted-foreground"
-  return v > 0
-    ? "text-emerald-600 dark:text-emerald-400"
-    : "text-red-600 dark:text-red-400"
-}
-
-function signedMoney(amount: number | null) {
-  if (amount == null) return "—"
-  const sign = amount > 0 ? "+" : ""
-  return `${sign}${fmt(amount)}`
 }
 
 function MetricCell({
@@ -186,6 +153,9 @@ export default function FundDetailPage() {
     }))
   }, [data])
 
+  const ready = !loading && data != null && !error
+  const rootRef = usePageEnter(ready)
+
   if (loading) {
     return (
       <div className="flex flex-1 items-center justify-center p-8">
@@ -212,9 +182,12 @@ export default function FundDetailPage() {
   const chg = fund.estimateChangePct
 
   return (
-    <div className="mx-auto w-full max-w-xl px-5 py-8 sm:px-6 sm:py-10">
+    <div
+      ref={rootRef}
+      className="mx-auto w-full max-w-xl px-5 py-8 sm:px-6 sm:py-10"
+    >
       {/* Header */}
-      <div className="mb-6 flex items-start justify-between gap-3">
+      <div className="anime-enter mb-6 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <Link
             href="/dashboard"
@@ -263,7 +236,7 @@ export default function FundDetailPage() {
       </div>
 
       {/* Quote hero */}
-      <section className="mb-8 text-center">
+      <section className="anime-enter mb-8 text-center">
         <p className="text-xs tracking-wide text-muted-foreground">
           {fund.estimateNav != null ? "估值" : "单位净值"}
         </p>
@@ -333,7 +306,7 @@ export default function FundDetailPage() {
       </section>
 
       {/* Nav chart */}
-      <section className="mb-8">
+      <section className="anime-enter mb-8">
         <div className="mb-2.5 flex items-center justify-between px-0.5">
           <h2 className="text-xs tracking-wide text-muted-foreground">
             净值走势
@@ -419,7 +392,7 @@ export default function FundDetailPage() {
 
       {/* Holding extras */}
       {holding && (
-        <section className="mb-8">
+        <section className="anime-enter mb-8">
           <div className="mb-2.5 px-0.5">
             <h2 className="text-xs tracking-wide text-muted-foreground">
               我的持仓
@@ -456,7 +429,7 @@ export default function FundDetailPage() {
       )}
 
       {/* Transactions for this fund */}
-      <section>
+      <section className="anime-enter">
         <div className="mb-2.5 flex items-center justify-between px-0.5">
           <h2 className="text-xs tracking-wide text-muted-foreground">
             相关交易
@@ -498,7 +471,7 @@ export default function FundDetailPage() {
                   <div className="flex items-baseline justify-between gap-4">
                     <div className="min-w-0">
                       <p className="text-sm font-medium">
-                        {TYPE_LABEL[tx.type] ?? tx.type}
+                        {TX_LABEL[tx.type] ?? tx.type}
                         <span className="ml-2 text-xs font-normal tabular-nums text-muted-foreground">
                           {tx.tradeDate.slice(0, 10)}
                         </span>

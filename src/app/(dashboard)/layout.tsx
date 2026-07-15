@@ -1,6 +1,7 @@
 import { AppSidebar } from "@/components/app-sidebar"
 import { CommandPalette } from "@/components/command-palette"
 import { DynamicBreadcrumb } from "@/components/dynamic-breadcrumb"
+import { HeaderUserMenu } from "@/components/header-user-menu"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Separator } from "@/components/ui/separator"
 import {
@@ -29,6 +30,7 @@ export default function DashboardLayout({
           </div>
           <div className="ml-auto flex items-center gap-2 pr-4">
             <ThemeToggle />
+            <HeaderUserMenu />
           </div>
         </header>
         <CommandPalette />

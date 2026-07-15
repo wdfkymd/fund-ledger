@@ -18,6 +18,9 @@ import {
   StarIcon,
   BriefcaseIcon,
 } from "lucide-react"
+import { usePageEnter } from "@/hooks/use-page-enter"
+import { fmtChg, fmtNav, tone } from "@/lib/format"
+import { refreshFundEstimates } from "@/lib/fund-refresh"
 import { cn } from "@/lib/utils"
 import { useRouter } from "next/navigation"
 
@@ -36,24 +39,6 @@ type WatchItem = {
 }
 
 const emptyAdd = { fundCode: "", fundName: "", note: "" }
-
-function fmtNav(v: number | null | undefined) {
-  if (v == null) return "—"
-  return v.toFixed(4)
-}
-
-function tone(v: number | null | undefined) {
-  if (v == null || v === 0) return "text-muted-foreground"
-  return v > 0
-    ? "text-emerald-600 dark:text-emerald-400"
-    : "text-red-600 dark:text-red-400"
-}
-
-function fmtChg(pct: number | null | undefined) {
-  if (pct == null) return "—"
-  const sign = pct > 0 ? "+" : ""
-  return `${sign}${pct.toFixed(2)}%`
-}
 
 const emptyHold = { shares: "", costPrice: "" }
 
@@ -83,31 +68,33 @@ export default function WatchlistPage() {
     }
   }, [])
 
+  /** force=true 手动刷新（转圈）；false 进页静默（TTL + 合并，不挡 UI） */
   const handleRefresh = useCallback(
-    async (silent = false) => {
-      if (!silent) setRefreshing(true)
+    async (force = false) => {
+      if (force) setRefreshing(true)
       try {
-        await fetch("/api/funds", { method: "POST" })
+        await refreshFundEstimates({ force })
         await fetchItems()
       } finally {
-        if (!silent) setRefreshing(false)
+        if (force) setRefreshing(false)
       }
     },
     [fetchItems],
   )
 
   useEffect(() => {
-    fetchItems()
+    void fetchItems()
   }, [fetchItems])
 
   useEffect(() => {
     if (loading || autoRefreshed) return
-    if (items.length === 0) {
+    // 进页只触发一次后台估值；用 rAF 避免 lint 对 effect 同步 setState 的告警
+    const id = requestAnimationFrame(() => {
       setAutoRefreshed(true)
-      return
-    }
-    setAutoRefreshed(true)
-    void handleRefresh(true)
+      if (items.length === 0) return
+      void handleRefresh(false)
+    })
+    return () => cancelAnimationFrame(id)
   }, [loading, items.length, autoRefreshed, handleRefresh])
 
   async function handleAdd(e: React.FormEvent) {
@@ -193,6 +180,8 @@ export default function WatchlistPage() {
     }
   }
 
+  const rootRef = usePageEnter(!loading)
+
   if (loading) {
     return (
       <div className="flex flex-1 items-center justify-center p-8">
@@ -205,9 +194,12 @@ export default function WatchlistPage() {
     .estimateTime
 
   return (
-    <div className="mx-auto w-full max-w-xl px-5 py-8 sm:px-6 sm:py-10">
+    <div
+      ref={rootRef}
+      className="mx-auto w-full max-w-xl px-5 py-8 sm:px-6 sm:py-10"
+    >
       {/* Header */}
-      <div className="mb-6 flex items-start justify-between gap-3">
+      <div className="anime-enter mb-6 flex items-start justify-between gap-3">
         <div>
           <h1 className="text-base font-semibold tracking-tight">自选</h1>
           <p className="mt-0.5 text-xs text-muted-foreground">
@@ -225,7 +217,7 @@ export default function WatchlistPage() {
           <Button
             variant="ghost"
             size="icon-sm"
-            onClick={() => handleRefresh(false)}
+            onClick={() => void handleRefresh(true)}
             disabled={refreshing || items.length === 0}
             title="刷新估值"
             className="text-muted-foreground"
@@ -296,7 +288,7 @@ export default function WatchlistPage() {
 
       {/* List */}
       {items.length === 0 ? (
-        <div className="rounded-xl border border-dashed py-16 text-center">
+        <div className="anime-enter rounded-xl border border-dashed py-16 text-center">
           <StarIcon className="mx-auto size-8 text-muted-foreground/30" />
           <p className="mt-3 text-sm text-muted-foreground">暂无自选</p>
           <button
@@ -308,13 +300,13 @@ export default function WatchlistPage() {
           </button>
         </div>
       ) : (
-        <ul className="divide-y overflow-hidden rounded-xl border">
+        <ul className="anime-enter divide-y overflow-hidden rounded-xl border">
           {items.map((item) => {
             const chg = item.fund.estimateChangePct
             const est = item.fund.estimateNav
             const nav = item.fund.nav
             return (
-              <li key={item.id} className="px-4 py-3.5 sm:px-5">
+              <li key={item.id} className="anime-list-item px-4 py-3.5 sm:px-5">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">

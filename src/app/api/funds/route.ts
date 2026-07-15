@@ -6,6 +6,12 @@ import {
   fetchFundFromEastMoney,
   searchFundsFromEastMoney,
 } from "@/lib/fund-api";
+import { mapPool } from "@/lib/async-pool";
+
+/** Cap concurrent East Money pulls (外网慢时并发过高只会一起卡死). */
+const ESTIMATE_CONCURRENCY = 3;
+/** 估值仍新鲜则跳过外网（毫秒） */
+const ESTIMATE_FRESH_MS = 2 * 60 * 1000;
 
 export async function GET(req: NextRequest) {
   try {
@@ -48,10 +54,18 @@ export async function POST() {
       }),
     ]);
 
-    const fundMap = new Map<
-      string,
-      { fundId: string; code: string; name: string; nav: number | null; navDate: Date | null }
-    >();
+    type FundEntry = {
+      fundId: string
+      code: string
+      name: string
+      nav: number | null
+      navDate: Date | null
+      estimateNav: number | null
+      updatedAt: Date
+      fund: (typeof holdings)[number]["fund"]
+    }
+
+    const fundMap = new Map<string, FundEntry>();
     for (const h of holdings) {
       fundMap.set(h.fundId, {
         fundId: h.fundId,
@@ -59,6 +73,9 @@ export async function POST() {
         name: h.fund.name,
         nav: h.fund.nav,
         navDate: h.fund.navDate,
+        estimateNav: h.fund.estimateNav,
+        updatedAt: h.fund.updatedAt,
+        fund: h.fund,
       });
     }
     for (const w of watchlist) {
@@ -69,56 +86,87 @@ export async function POST() {
           name: w.fund.name,
           nav: w.fund.nav,
           navDate: w.fund.navDate,
+          estimateNav: w.fund.estimateNav,
+          updatedAt: w.fund.updatedAt,
+          fund: w.fund,
         });
       }
     }
 
-    const results = [];
-    for (const entry of fundMap.values()) {
-      try {
-        const info = await fetchFundFromEastMoney(entry.code);
-        const updated = await prisma.fund.update({
-          where: { id: entry.fundId },
-          data: {
-            name: info.name || entry.name,
-            // 单位净值：仅用 dwjz；勿用估值覆盖
-            nav: info.nav ?? entry.nav,
-            navDate: info.navDate ? new Date(info.navDate) : entry.navDate,
-            estimateNav: info.estimateNav ?? null,
-            estimateChangePct: info.estimateChangePct ?? null,
-            estimateTime: info.estimateTime ?? null,
-          },
-        });
+    const now = Date.now();
+    const entries = [...fundMap.values()];
+    const stale: typeof entries = [];
+    const fresh: typeof entries = [];
+    for (const e of entries) {
+      if (
+        e.estimateNav == null ||
+        now - e.updatedAt.getTime() >= ESTIMATE_FRESH_MS
+      ) {
+        stale.push(e);
+      } else {
+        fresh.push(e);
+      }
+    }
 
-        // 历史只记单位净值，不记盘中估值
-        if (info.nav && info.navDate) {
-          await prisma.navHistory.upsert({
-            where: {
-              fundId_date: {
+    // 仍新鲜：直接返回本地，不打外网
+    const freshResults = fresh.map((e) => ({
+      fundId: e.fundId,
+      ok: true as const,
+      skipped: true as const,
+      fund: e.fund,
+    }));
+
+    const staleResults = await mapPool(
+      stale,
+      ESTIMATE_CONCURRENCY,
+      async (entry) => {
+        try {
+          const info = await fetchFundFromEastMoney(entry.code);
+          const updated = await prisma.fund.update({
+            where: { id: entry.fundId },
+            data: {
+              name: info.name || entry.name,
+              // 单位净值：仅用 dwjz；勿用估值覆盖
+              nav: info.nav ?? entry.nav,
+              navDate: info.navDate ? new Date(info.navDate) : entry.navDate,
+              estimateNav: info.estimateNav ?? null,
+              estimateChangePct: info.estimateChangePct ?? null,
+              estimateTime: info.estimateTime ?? null,
+            },
+          });
+
+          // 历史只记单位净值，不记盘中估值
+          if (info.nav && info.navDate) {
+            await prisma.navHistory.upsert({
+              where: {
+                fundId_date: {
+                  fundId: entry.fundId,
+                  date: new Date(info.navDate),
+                },
+              },
+              create: {
                 fundId: entry.fundId,
+                nav: info.nav,
                 date: new Date(info.navDate),
               },
-            },
-            create: {
-              fundId: entry.fundId,
-              nav: info.nav,
-              date: new Date(info.navDate),
-            },
-            update: { nav: info.nav },
-          });
+              update: { nav: info.nav },
+            });
+          }
+
+          return { fundId: entry.fundId, ok: true as const, fund: updated };
+        } catch (error) {
+          // 外网超时/失败：保留库内旧估值，不整页失败
+          return {
+            fundId: entry.fundId,
+            ok: false as const,
+            error: error instanceof Error ? error.message : "更新失败",
+            fund: entry.fund,
+          };
         }
+      },
+    );
 
-        results.push({ fundId: entry.fundId, ok: true, fund: updated });
-      } catch (error) {
-        results.push({
-          fundId: entry.fundId,
-          ok: false,
-          error: error instanceof Error ? error.message : "更新失败",
-        });
-      }
-    }
-
-    return ok(results);
+    return ok([...freshResults, ...staleResults]);
   } catch (error) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return unauthorized();

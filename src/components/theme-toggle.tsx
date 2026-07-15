@@ -21,6 +21,7 @@ function ContrastIcon({ className }: { className?: string }) {
       strokeLinecap="round"
       strokeLinejoin="round"
       className={className}
+      aria-hidden
     >
       <path stroke="none" d="M0 0h24v24H0z" fill="none" />
       <path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" />
@@ -32,27 +33,32 @@ function ContrastIcon({ className }: { className?: string }) {
   )
 }
 
+/**
+ * Theme toggle — same markup on server and client so the button
+ * does not flash / remount on page refresh (hydration).
+ */
 export function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme()
   const mounted = useIsMounted()
 
-  if (!mounted) {
-    return (
-      <Button variant="ghost" size="icon" className="size-8 rounded-full">
-        <span className="sr-only">Toggle theme</span>
-      </Button>
-    )
-  }
-
   return (
     <Button
+      type="button"
       variant="ghost"
       size="icon"
-      className="size-8 rounded-full"
-      onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+      className="size-8 shrink-0 rounded-full"
+      suppressHydrationWarning
+      disabled={!mounted}
+      onClick={() => {
+        if (!mounted) return
+        setTheme(resolvedTheme === "dark" ? "light" : "dark")
+      }}
+      aria-label={
+        mounted && resolvedTheme === "dark" ? "切换到浅色模式" : "切换到深色模式"
+      }
     >
       <ContrastIcon className="size-[18px]" />
-      <span className="sr-only">Toggle theme</span>
+      <span className="sr-only">切换主题</span>
     </Button>
   )
 }

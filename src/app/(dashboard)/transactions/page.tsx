@@ -25,6 +25,8 @@ import {
   ArrowUpRightIcon,
   RepeatIcon,
 } from "lucide-react"
+import { usePageEnter } from "@/hooks/use-page-enter"
+import { fmt } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
 type Transaction = {
@@ -88,16 +90,136 @@ const emptyForm = {
   note: "",
 }
 
-function fmt(v: number) {
-  return v.toLocaleString("zh-CN", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
-}
-
 function signedAmount(type: string, amount: number) {
   const sign = type === "SELL" ? "+" : "-"
   return `${sign}${fmt(amount)}`
+}
+
+function amountLabel(type: string) {
+  if (type === "SELL") return "卖出金额"
+  if (type === "SIP") return "定投金额"
+  return "买入金额"
+}
+
+type TxForm = typeof emptyForm
+
+function TxFields({
+  value,
+  onChange,
+  showHolding,
+  holdings,
+}: {
+  value: TxForm
+  onChange: (v: TxForm) => void
+  showHolding: boolean
+  holdings: Holding[]
+}) {
+  return (
+    <>
+      {showHolding && (
+        <div className="space-y-2">
+          <label className="text-sm font-medium">持仓基金</label>
+          <Select
+            value={value.holdingId || ""}
+            onValueChange={(v) => onChange({ ...value, holdingId: v ?? "" })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="选择基金" />
+            </SelectTrigger>
+            <SelectContent>
+              {holdings.map((h) => (
+                <SelectItem key={h.id} value={h.id}>
+                  {h.fund.name} ({h.fund.code})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+      <div className="space-y-2">
+        <label className="text-sm font-medium">类型</label>
+        <Select
+          value={value.type}
+          onValueChange={(v) => onChange({ ...value, type: v ?? "BUY" })}
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="BUY">买入</SelectItem>
+            <SelectItem value="SELL">卖出</SelectItem>
+            <SelectItem value="SIP">定投</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-2">
+          <label className="text-sm font-medium">
+            {amountLabel(value.type)}
+          </label>
+          <Input
+            type="number"
+            step="0.01"
+            placeholder="金额"
+            value={value.amount}
+            onChange={(e) => onChange({ ...value, amount: e.target.value })}
+            required
+          />
+        </div>
+        <div className="space-y-2">
+          <label className="text-sm font-medium">份额</label>
+          <Input
+            type="number"
+            step="0.01"
+            placeholder="份额"
+            value={value.shares}
+            onChange={(e) => onChange({ ...value, shares: e.target.value })}
+            required
+          />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-2">
+          <label className="text-sm font-medium">净值</label>
+          <Input
+            type="number"
+            step="0.0001"
+            placeholder="净值"
+            value={value.nav}
+            onChange={(e) => onChange({ ...value, nav: e.target.value })}
+            required
+          />
+        </div>
+        <div className="space-y-2">
+          <label className="text-sm font-medium">手续费</label>
+          <Input
+            type="number"
+            step="0.01"
+            placeholder="0"
+            value={value.fee}
+            onChange={(e) => onChange({ ...value, fee: e.target.value })}
+          />
+        </div>
+      </div>
+      <div className="space-y-2">
+        <label className="text-sm font-medium">交易日期</label>
+        <Input
+          type="date"
+          value={value.tradeDate}
+          onChange={(e) => onChange({ ...value, tradeDate: e.target.value })}
+          required
+        />
+      </div>
+      <div className="space-y-2">
+        <label className="text-sm font-medium">备注（可选）</label>
+        <Input
+          placeholder="备注"
+          value={value.note}
+          onChange={(e) => onChange({ ...value, note: e.target.value })}
+        />
+      </div>
+    </>
+  )
 }
 
 export default function TransactionsPage() {
@@ -242,128 +364,7 @@ export default function TransactionsPage() {
     if (r.ok) await fetchData()
   }
 
-  function amountLabel(type: string) {
-    if (type === "SELL") return "卖出金额"
-    if (type === "SIP") return "定投金额"
-    return "买入金额"
-  }
-
-  function TxFields({
-    value,
-    onChange,
-    showHolding,
-  }: {
-    value: typeof emptyForm
-    onChange: (v: typeof emptyForm) => void
-    showHolding: boolean
-  }) {
-    return (
-      <>
-        {showHolding && (
-          <div className="space-y-2">
-            <label className="text-sm font-medium">持仓基金</label>
-            <Select
-              value={value.holdingId || ""}
-              onValueChange={(v) => onChange({ ...value, holdingId: v ?? "" })}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="选择基金" />
-              </SelectTrigger>
-              <SelectContent>
-                {holdings.map((h) => (
-                  <SelectItem key={h.id} value={h.id}>
-                    {h.fund.name} ({h.fund.code})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-        <div className="space-y-2">
-          <label className="text-sm font-medium">类型</label>
-          <Select
-            value={value.type}
-            onValueChange={(v) => onChange({ ...value, type: v ?? "BUY" })}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="BUY">买入</SelectItem>
-              <SelectItem value="SELL">卖出</SelectItem>
-              <SelectItem value="SIP">定投</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-2">
-            <label className="text-sm font-medium">
-              {amountLabel(value.type)}
-            </label>
-            <Input
-              type="number"
-              step="0.01"
-              placeholder="金额"
-              value={value.amount}
-              onChange={(e) => onChange({ ...value, amount: e.target.value })}
-              required
-            />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium">份额</label>
-            <Input
-              type="number"
-              step="0.01"
-              placeholder="份额"
-              value={value.shares}
-              onChange={(e) => onChange({ ...value, shares: e.target.value })}
-              required
-            />
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-2">
-            <label className="text-sm font-medium">净值</label>
-            <Input
-              type="number"
-              step="0.0001"
-              placeholder="净值"
-              value={value.nav}
-              onChange={(e) => onChange({ ...value, nav: e.target.value })}
-              required
-            />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium">手续费</label>
-            <Input
-              type="number"
-              step="0.01"
-              placeholder="0"
-              value={value.fee}
-              onChange={(e) => onChange({ ...value, fee: e.target.value })}
-            />
-          </div>
-        </div>
-        <div className="space-y-2">
-          <label className="text-sm font-medium">交易日期</label>
-          <Input
-            type="date"
-            value={value.tradeDate}
-            onChange={(e) => onChange({ ...value, tradeDate: e.target.value })}
-            required
-          />
-        </div>
-        <div className="space-y-2">
-          <label className="text-sm font-medium">备注（可选）</label>
-          <Input
-            placeholder="备注"
-            value={value.note}
-            onChange={(e) => onChange({ ...value, note: e.target.value })}
-          />
-        </div>
-      </>
-    )
-  }
+  const rootRef = usePageEnter(!loading)
 
   if (loading) {
     return (
@@ -374,9 +375,12 @@ export default function TransactionsPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-xl px-5 py-8 sm:px-6 sm:py-10">
+    <div
+      ref={rootRef}
+      className="mx-auto w-full max-w-xl px-5 py-8 sm:px-6 sm:py-10"
+    >
       {/* Header */}
-      <div className="mb-5 flex items-start justify-between gap-3">
+      <div className="anime-enter mb-5 flex items-start justify-between gap-3">
         <div>
           <h1 className="text-base font-semibold tracking-tight">交易记录</h1>
           <p className="mt-0.5 text-xs text-muted-foreground">
@@ -407,7 +411,12 @@ export default function TransactionsPage() {
               <DialogTitle>记一笔交易</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <TxFields value={form} onChange={setForm} showHolding />
+              <TxFields
+                value={form}
+                onChange={setForm}
+                showHolding
+                holdings={holdings}
+              />
               {error && <p className="text-xs text-red-500">{error}</p>}
               <Button type="submit" className="w-full" disabled={submitting}>
                 提交
@@ -437,6 +446,7 @@ export default function TransactionsPage() {
               value={editForm}
               onChange={setEditForm}
               showHolding={false}
+              holdings={holdings}
             />
             {error && <p className="text-xs text-red-500">{error}</p>}
             <Button type="submit" className="w-full" disabled={submitting}>
@@ -447,7 +457,7 @@ export default function TransactionsPage() {
       </Dialog>
 
       {/* Filters */}
-      <div className="mb-4 flex flex-wrap items-center gap-1 rounded-xl border bg-muted/40 p-1 text-xs">
+      <div className="anime-enter mb-4 flex flex-wrap items-center gap-1 rounded-xl border bg-muted/40 p-1 text-xs">
         {FILTERS.map((f) => (
           <button
             key={f.value}
@@ -470,7 +480,7 @@ export default function TransactionsPage() {
 
       {/* List */}
       {txs.length === 0 ? (
-        <div className="rounded-xl border border-dashed py-16 text-center">
+        <div className="anime-enter rounded-xl border border-dashed py-16 text-center">
           <p className="text-sm text-muted-foreground">暂无交易记录</p>
           {holdings.length > 0 ? (
             <button
@@ -487,15 +497,15 @@ export default function TransactionsPage() {
           )}
         </div>
       ) : visible.length === 0 ? (
-        <div className="rounded-xl border border-dashed py-12 text-center">
+        <div className="anime-enter rounded-xl border border-dashed py-12 text-center">
           <p className="text-sm text-muted-foreground">该筛选下暂无交易</p>
         </div>
       ) : (
-        <ul className="divide-y overflow-hidden rounded-xl border">
+        <ul className="anime-enter divide-y overflow-hidden rounded-xl border">
           {visible.map((tx) => {
             const meta = TYPE_META[tx.type] ?? TYPE_META.BUY
             return (
-              <li key={tx.id} className="px-4 py-3.5 sm:px-5">
+              <li key={tx.id} className="anime-list-item px-4 py-3.5 sm:px-5">
                 {/* Primary row */}
                 <div className="flex items-baseline justify-between gap-6">
                   <div className="min-w-0">

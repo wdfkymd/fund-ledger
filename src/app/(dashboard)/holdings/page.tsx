@@ -13,6 +13,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { PlusIcon, Trash2Icon, PencilIcon } from "lucide-react"
+import { usePageEnter } from "@/hooks/use-page-enter"
+import { fmt, fmtPct, signedMoney, tone } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
 type Holding = {
@@ -38,32 +40,6 @@ type Holding = {
 }
 
 const emptyAdd = { fundCode: "", fundName: "", shares: "", costPrice: "" }
-
-function fmt(v: number) {
-  return v.toLocaleString("zh-CN", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
-}
-
-function fmtPct(rate: number | null | undefined) {
-  if (rate == null) return "—"
-  const sign = rate > 0 ? "+" : ""
-  return `${sign}${(rate * 100).toFixed(2)}%`
-}
-
-function tone(v: number | null | undefined) {
-  if (v == null || v === 0) return "text-muted-foreground"
-  return v > 0
-    ? "text-emerald-600 dark:text-emerald-400"
-    : "text-red-600 dark:text-red-400"
-}
-
-function signedMoney(amount: number | null) {
-  if (amount == null) return "—"
-  const sign = amount > 0 ? "+" : ""
-  return `${sign}${fmt(amount)}`
-}
 
 function MiniMetric({
   label,
@@ -227,6 +203,8 @@ function HoldingsPageInner() {
     }
   }
 
+  const rootRef = usePageEnter(!loading)
+
   if (loading) {
     return (
       <div className="flex flex-1 items-center justify-center p-8">
@@ -236,9 +214,12 @@ function HoldingsPageInner() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-xl px-5 py-8 sm:px-6 sm:py-10">
+    <div
+      ref={rootRef}
+      className="mx-auto w-full max-w-xl px-5 py-8 sm:px-6 sm:py-10"
+    >
       {/* Header — same rhythm as watchlist */}
-      <div className="mb-6 flex items-start justify-between gap-3">
+      <div className="anime-enter mb-6 flex items-start justify-between gap-3">
         <div>
           <h1 className="text-base font-semibold tracking-tight">持仓</h1>
           <p className="mt-0.5 text-xs text-muted-foreground">
@@ -407,7 +388,7 @@ function HoldingsPageInner() {
 
       {/* List */}
       {holdings.length === 0 ? (
-        <div className="rounded-xl border border-dashed py-16 text-center">
+        <div className="anime-enter rounded-xl border border-dashed py-16 text-center">
           <p className="text-sm text-muted-foreground">暂无持仓</p>
           <button
             type="button"
@@ -418,7 +399,7 @@ function HoldingsPageInner() {
           </button>
         </div>
       ) : (
-        <ul className="divide-y overflow-hidden rounded-xl border">
+        <ul className="anime-enter divide-y overflow-hidden rounded-xl border">
           {holdings.map((h) => {
             const value = h.estimateValue || h.marketValue
             const profit = h.estimateProfit ?? h.profit
@@ -428,7 +409,7 @@ function HoldingsPageInner() {
             const costPrice = h.shares > 0 ? h.costAmount / h.shares : 0
 
             return (
-              <li key={h.id} className="px-4 py-4 sm:px-5">
+              <li key={h.id} className="anime-list-item px-4 py-4 sm:px-5">
                 {/* Primary row — same as dashboard / watchlist */}
                 <div className="flex items-baseline justify-between gap-6">
                   <div className="min-w-0">
