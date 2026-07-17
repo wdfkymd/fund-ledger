@@ -11,6 +11,7 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   sidebarMenuButtonVariants,
+  useSidebar,
 } from "@/components/ui/sidebar"
 
 export function NavSecondary({
@@ -26,6 +27,7 @@ export function NavSecondary({
   }[]
 } & React.ComponentPropsWithoutRef<typeof SidebarGroup>) {
   const pathname = usePathname()
+  const { isMobile, setOpenMobile } = useSidebar()
 
   return (
     <SidebarGroup {...props}>
@@ -39,6 +41,9 @@ export function NavSecondary({
               <SidebarMenuItem key={item.title}>
                 <Link
                   href={item.url}
+                  onClick={() => {
+                    if (isMobile) setOpenMobile(false)
+                  }}
                   className={cn(
                     sidebarMenuButtonVariants({ size: "sm" }),
                     active &&

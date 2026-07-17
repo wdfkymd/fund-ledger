@@ -9,6 +9,7 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   sidebarMenuButtonVariants,
+  useSidebar,
 } from "@/components/ui/sidebar"
 
 export function NavMain({
@@ -25,6 +26,7 @@ export function NavMain({
   className?: string
 }) {
   const pathname = usePathname()
+  const { isMobile, setOpenMobile } = useSidebar()
 
   return (
     <SidebarGroup className={className}>
@@ -37,6 +39,9 @@ export function NavMain({
             <SidebarMenuItem key={item.title}>
               <Link
                 href={item.url}
+                onClick={() => {
+                  if (isMobile) setOpenMobile(false)
+                }}
                 className={cn(
                   sidebarMenuButtonVariants({ size: "default" }),
                   active &&

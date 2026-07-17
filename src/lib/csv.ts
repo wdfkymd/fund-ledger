@@ -1,11 +1,15 @@
-/** CSV 字段转义：双引号包住，内部 " 写成 "" */
+/**
+ * CSV 字段转义：防止公式注入 + 正确引用。
+ * Excel/Google Sheets 中以 = + - @ 开头的会被拦截。
+ */
 export function csvCell(value: string | number | null | undefined): string {
   if (value == null) return "";
   const s = String(value);
-  if (/[",\n\r]/.test(s)) {
-    return `"${s.replace(/"/g, '""')}"`;
+  const safe = /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
+  if (/[",\n\r]/.test(safe)) {
+    return `"${safe.replace(/"/g, '""')}"`;
   }
-  return s;
+  return safe;
 }
 
 export function toCsv(
@@ -16,7 +20,6 @@ export function toCsv(
     headers.map(csvCell).join(","),
     ...rows.map((row) => row.map(csvCell).join(",")),
   ];
-  // Excel 友好：UTF-8 BOM
   return `\uFEFF${lines.join("\n")}\n`;
 }
 

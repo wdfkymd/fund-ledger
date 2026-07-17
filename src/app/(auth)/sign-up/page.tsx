@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -11,6 +11,13 @@ import { LandmarkIcon, LoaderCircleIcon } from "lucide-react"
 
 export default function SignUpPage() {
   const router = useRouter()
+
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((r) => { if (r.ok) router.replace("/dashboard") })
+      .catch(() => {})
+  }, [router])
+
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [name, setName] = useState("")

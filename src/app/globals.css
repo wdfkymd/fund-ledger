@@ -2,7 +2,20 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* Tailwind v4：显式 content 扫描（相对本 CSS），生产剔除未用 utility */
+@source "../**/*.{js,ts,jsx,tsx}";
+
 @custom-variant dark (&:is(.dark *));
+
+/* 主题切换时减少浏览器默认白底闪一下 */
+html {
+  color-scheme: light;
+  background-color: oklch(1 0 0);
+}
+html.dark {
+  color-scheme: dark;
+  background-color: oklch(0.145 0 0);
+}
 
 @theme inline {
   --color-background: var(--background);
@@ -129,15 +142,14 @@
   }
 }
 
-@keyframes marquee {
-  0% {
-    transform: translateX(0);
-  }
-  100% {
-    transform: translateX(-50%);
-  }
+@keyframes skeleton-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-@utility animate-marquee {
-  animation: marquee 40s linear infinite;
+@keyframes avatar-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
+
+

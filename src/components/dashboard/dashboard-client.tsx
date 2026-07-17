@@ -1,71 +1,21 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import Link from "next/link"
+import { motion } from "motion/react"
+import { Skeleton } from "@/components/ui/skeleton"
+import { container as containerV, staggerItem } from "@/lib/motion-variants"
 import { Button } from "@/components/ui/button"
 import { RefreshCwIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
+import type { DashboardPayload } from "@/lib/dashboard-data"
 
-type Holding = {
-  id: string
-  shares: number
-  costAmount: number
-  estimateValue: number
-  estimateProfit: number
-  estimateProfitRate: number
-  dayProfit: number | null
-  dayProfitRate: number | null
-  fund: {
-    code: string
-    name: string
-    nav: number | null
-    estimateNav: number | null
-    estimateChangePct: number | null
-    estimateTime: string | null
-  }
-}
-
-type WatchItem = {
-  id: string
-  note: string | null
-  isHeld: boolean
-  fund: {
-    code: string
-    name: string
-    nav: number | null
-    estimateNav: number | null
-    estimateChangePct: number | null
-    estimateTime: string | null
-  }
-}
-
-type Summary = {
-  totalCost: number
-  totalEstimateValue: number
-  totalEstimateProfit: number
-  totalEstimateProfitRate: number
-  totalDayProfit: number | null
-  totalDayProfitRate: number | null
-}
-
+type Holding = DashboardPayload["holdings"][number]
+type WatchItem = DashboardPayload["watchlist"][number]
+type Summary = DashboardPayload["summary"]
+type MarketIndex = DashboardPayload["indices"][number]
+type RecentTx = DashboardPayload["recentTxs"][number]
 type ListTab = "holdings" | "watchlist"
-
-type MarketIndex = {
-  name: string
-  code: string
-  price: number | null
-  changePct: number | null
-  change: number | null
-}
-
-type RecentTx = {
-  id: string
-  type: string
-  amount: number
-  shares: number
-  tradeDate: string
-  holding: { fund: { name: string; code: string } }
-}
 
 const TX_LABEL: Record<string, string> = {
   BUY: "买入",
@@ -142,104 +92,71 @@ function fmtIndexPrice(v: number | null) {
   })
 }
 
-export function DashboardClient() {
-  const [holdings, setHoldings] = useState<Holding[]>([])
-  const [watchlist, setWatchlist] = useState<WatchItem[]>([])
-  const [recentTxs, setRecentTxs] = useState<RecentTx[]>([])
-  const [summary, setSummary] = useState<Summary | null>(null)
-  const [indices, setIndices] = useState<MarketIndex[]>([])
+export function DashboardClient({ initial }: { initial: DashboardPayload }) {
+  const [holdings, setHoldings] = useState<Holding[]>(initial.holdings)
+  const [watchlist, setWatchlist] = useState<WatchItem[]>(initial.watchlist)
+  const [recentTxs, setRecentTxs] = useState<RecentTx[]>(initial.recentTxs)
+  const [summary, setSummary] = useState<Summary>(initial.summary)
+  const [indices, setIndices] = useState<MarketIndex[]>(initial.indices)
+  const [indicesLoading, setIndicesLoading] = useState(initial.indices.length === 0)
   const [tab, setTab] = useState<ListTab>("holdings")
-  const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
-  const [autoRefreshed, setAutoRefreshed] = useState(false)
 
-  const fetchIndices = useCallback(async () => {
-    try {
-      const r = await fetch("/api/market/indices")
-      if (r.ok) {
-        const d = await r.json()
-        setIndices(d.data.indices ?? [])
-      }
-    } catch {
-      // 指数失败不挡主流程
-    }
-  }, [])
+  useEffect(() => {
+    if (initial.indices.length > 0) return
+    fetch("/api/market/indices")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d?.data?.indices) setIndices(d.data.indices)
+      })
+      .catch(() => {})
+      .finally(() => setIndicesLoading(false))
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchData = useCallback(async () => {
-    try {
-      const [hR, wR, tR] = await Promise.all([
-        fetch("/api/holdings"),
-        fetch("/api/watchlist"),
-        fetch("/api/transactions?limit=5"),
-      ])
-      if (hR.ok) {
-        const d = await hR.json()
-        setHoldings(d.data.holdings)
-        setSummary(d.data.summary)
-      }
-      if (wR.ok) {
-        const d = await wR.json()
-        setWatchlist(d.data.items)
-      }
-      if (tR.ok) {
-        const d = await tR.json()
-        setRecentTxs(Array.isArray(d.data) ? d.data : [])
-      }
-    } finally {
-      setLoading(false)
+    const [hR, wR, tR, iR] = await Promise.all([
+      fetch("/api/holdings"),
+      fetch("/api/watchlist"),
+      fetch("/api/transactions?limit=5"),
+      fetch("/api/market/indices"),
+    ])
+    if (hR.ok) {
+      const d = await hR.json()
+      setHoldings(d.data.holdings)
+      setSummary(d.data.summary)
+    }
+    if (wR.ok) {
+      const d = await wR.json()
+      setWatchlist(d.data.items)
+    }
+    if (tR.ok) {
+      const d = await tR.json()
+      setRecentTxs(Array.isArray(d.data) ? d.data : [])
+    }
+    if (iR.ok) {
+      const d = await iR.json().catch(() => null)
+      if (d?.data?.indices) setIndices(d.data.indices)
     }
   }, [])
 
-  const handleRefresh = useCallback(
-    async (silent = false) => {
-      if (!silent) setRefreshing(true)
-      try {
-        await Promise.all([
-          fetch("/api/funds", { method: "POST" }),
-          fetchIndices(),
-        ])
-        await fetchData()
-      } finally {
-        if (!silent) setRefreshing(false)
-      }
-    },
-    [fetchData, fetchIndices],
-  )
-
-  useEffect(() => {
-    void fetchData()
-    void fetchIndices()
-  }, [fetchData, fetchIndices])
-
-  useEffect(() => {
-    if (loading || autoRefreshed) return
-    if (holdings.length === 0 && watchlist.length === 0) {
-      setAutoRefreshed(true)
-      return
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true)
+    try {
+      await fetch("/api/funds", { method: "POST" })
+      await fetchData()
+    } finally {
+      setRefreshing(false)
     }
-    setAutoRefreshed(true)
-    void handleRefresh(true)
-  }, [
-    loading,
-    holdings.length,
-    watchlist.length,
-    autoRefreshed,
-    handleRefresh,
-  ])
+  }, [fetchData])
 
-  if (loading) {
-    return (
-      <div className="flex flex-1 items-center justify-center p-8">
-        <p className="text-sm text-muted-foreground">加载中…</p>
-      </div>
-    )
-  }
-
-  const assets = summary?.totalEstimateValue ?? 0
+  const settled = !summary?.isEstimate
+  const assets = settled ? (summary?.totalMarketValue ?? 0) : (summary?.totalEstimateValue ?? 0)
   const day = summary?.totalDayProfit ?? null
   const dayRate = summary?.totalDayProfitRate ?? null
-  const profit = summary?.totalEstimateProfit ?? 0
-  const profitRate = summary?.totalEstimateProfitRate ?? 0
+  const profit = settled ? (summary?.totalProfit ?? 0) : (summary?.totalEstimateProfit ?? 0)
+  const profitRate = settled
+    ? (summary?.totalProfitRate ?? 0)
+    : (summary?.totalEstimateProfitRate ?? 0)
   const cost = summary?.totalCost ?? 0
 
   const estimateTime =
@@ -251,17 +168,19 @@ export function DashboardClient() {
 
   return (
     <div className="mx-auto w-full max-w-xl px-5 py-8 sm:px-6 sm:py-10">
-      {/* Market index strip — slim horizontal scroll */}
-      {indices.length > 0 && (
-        <div className="mb-6 -mx-1">
-          <div
+      {/* 固定高度，避免加载/空数据时挤压下方布局 */}
+      <div className="mb-6 -mx-1 min-h-9">
+        {indices.length > 0 ? (
+          <motion.div
             className="flex gap-2 overflow-x-auto px-1 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             style={{ WebkitOverflowScrolling: "touch" }}
+            {...containerV}
           >
-            {indices.map((idx) => (
-              <div
+            {indices.map((idx, i) => (
+              <motion.div
                 key={idx.code}
                 className="flex shrink-0 items-center gap-2 rounded-full border bg-muted/30 px-3 py-1.5"
+                {...staggerItem(i)}
               >
                 <span className="text-[11px] text-muted-foreground whitespace-nowrap">
                   {idx.name}
@@ -277,19 +196,34 @@ export function DashboardClient() {
                 >
                   {fmtChg(idx.changePct)}
                 </span>
+              </motion.div>
+            ))}
+          </motion.div>
+        ) : indicesLoading ? (
+          <div
+            className="flex gap-2 overflow-x-auto px-1 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            style={{ WebkitOverflowScrolling: "touch" }}
+          >
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div
+                key={i}
+                className="flex shrink-0 items-center gap-2 rounded-full border bg-muted/30 px-3 py-1.5"
+              >
+                <Skeleton className="h-3 w-8 rounded-full" />
+                <Skeleton className="h-3 w-12 rounded-full" />
+                <Skeleton className="h-3 w-10 rounded-full" />
               </div>
             ))}
           </div>
-        </div>
-      )}
+        ) : null}
+      </div>
 
-      {/* Hero — always holdings summary (assets) */}
       <section className="relative mb-8 text-center">
         <div className="absolute right-0 top-0">
           <Button
             variant="ghost"
             size="icon-sm"
-            onClick={() => handleRefresh(false)}
+            onClick={() => void handleRefresh()}
             disabled={refreshing}
             title="刷新估值与指数"
             className="text-muted-foreground"
@@ -328,19 +262,18 @@ export function DashboardClient() {
         <div className="mt-8 grid grid-cols-3 items-start divide-x rounded-xl border bg-muted/40 py-3.5 sm:py-4">
           <MetricCell label="总成本" value={fmt(cost)} />
           <MetricCell
-            label="累计盈亏"
+            label={settled ? "累计盈亏" : "预估盈亏"}
             value={signedMoney(profit)}
             valueClassName={tone(profit)}
           />
           <MetricCell
-            label="收益率"
+            label={settled ? "收益率" : "预估率"}
             value={fmtPct(profitRate)}
             valueClassName={tone(profitRate)}
           />
         </div>
       </section>
 
-      {/* List with 持仓 / 自选 toggle */}
       <section>
         <div className="mb-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-1 rounded-xl border bg-muted/40 p-1 text-xs">
@@ -397,6 +330,7 @@ export function DashboardClient() {
           ) : (
             <ul className="divide-y overflow-hidden rounded-xl border">
               {holdings.map((h) => {
+                const hSettled = !h.isEstimate
                 const dp = h.dayProfit
                 const dpr = h.dayProfitRate
                 const chg = h.fund.estimateChangePct
@@ -418,7 +352,7 @@ export function DashboardClient() {
                       </div>
                       <div className="shrink-0 text-right">
                         <p className="text-sm font-medium tabular-nums tracking-tight">
-                          {fmt(h.estimateValue)}
+                          {hSettled ? fmt(h.marketValue) : fmt(h.estimateValue)}
                         </p>
                         <p
                           className={cn(
@@ -452,15 +386,15 @@ export function DashboardClient() {
                       <span className="mx-2 opacity-30">|</span>
                       <span>
                         累计{" "}
-                        <span className={tone(h.estimateProfit)}>
-                          {signedMoney(h.estimateProfit)}
+                        <span className={tone(hSettled ? h.profit : h.estimateProfit)}>
+                          {signedMoney(hSettled ? h.profit : h.estimateProfit)}
                         </span>
                       </span>
                       <span className="mx-2 opacity-30">|</span>
                       <span>
                         收益{" "}
-                        <span className={tone(h.estimateProfitRate)}>
-                          {fmtPct(h.estimateProfitRate)}
+                        <span className={tone(hSettled ? h.profitRate : h.estimateProfitRate)}>
+                          {fmtPct(hSettled ? h.profitRate : h.estimateProfitRate)}
                         </span>
                       </span>
                     </p>
@@ -557,7 +491,6 @@ export function DashboardClient() {
         )}
       </section>
 
-      {/* Recent transactions */}
       <section className="mt-8">
         <div className="mb-3 flex items-center justify-between gap-3">
           <h2 className="text-sm font-medium">最近交易</h2>

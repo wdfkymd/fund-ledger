@@ -33,6 +33,7 @@ function AvatarImage({ className, ...props }: AvatarPrimitive.Image.Props) {
         "aspect-square size-full rounded-full object-cover",
         className
       )}
+      style={{ animation: "avatar-fade-in 0.2s ease-in forwards" }}
       {...props}
     />
   )

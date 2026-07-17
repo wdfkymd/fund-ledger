@@ -1,12 +1,7 @@
 "use client"
 
-import { useTheme } from "next-themes"
-import { useSyncExternalStore } from "react"
 import { Button } from "@/components/ui/button"
-
-const emptySubscribe = () => () => {}
-const useIsMounted = () =>
-  useSyncExternalStore(emptySubscribe, () => true, () => false)
+import { useTheme } from "@/components/theme-provider"
 
 function ContrastIcon({ className }: { className?: string }) {
   return (
@@ -34,15 +29,6 @@ function ContrastIcon({ className }: { className?: string }) {
 
 export function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme()
-  const mounted = useIsMounted()
-
-  if (!mounted) {
-    return (
-      <Button variant="ghost" size="icon" className="size-8 rounded-full">
-        <span className="sr-only">Toggle theme</span>
-      </Button>
-    )
-  }
 
   return (
     <Button
@@ -52,7 +38,7 @@ export function ThemeToggle() {
       onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
     >
       <ContrastIcon className="size-[18px]" />
-      <span className="sr-only">Toggle theme</span>
+      <span className="sr-only">切换主题</span>
     </Button>
   )
 }

@@ -16,7 +16,8 @@ function resolveDbUrl() {
   if (path.isAbsolute(filePath)) {
     return raw;
   }
-  return `file:${path.join(process.cwd(), filePath)}`;
+  // 固定拼到项目根下的相对路径，避免 process.cwd() 被 NFT 当成整仓追踪
+  return `file:${path.join(/* turbopackIgnore: true */ process.cwd(), filePath)}`;
 }
 
 function createPrismaClient() {

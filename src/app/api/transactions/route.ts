@@ -1,98 +1,64 @@
-import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireUser } from "@/lib/auth";
-import { fail, ok, toErrorMessage, unauthorized } from "@/lib/api";
+import { AppError, fail, ok, withApi } from "@/lib/api";
 import { transactionCreateSchema } from "@/lib/validators";
-import { applyTransactionEffect } from "@/lib/finance";
+import { parseTradeDate } from "@/lib/trade-date";
+import { syncHoldingFromLedger } from "@/lib/holding-ledger";
+import { getTransactionsList } from "@/lib/transactions-data";
 
-export async function GET(req: NextRequest) {
-  try {
-    const user = await requireUser();
-    const holdingId = req.nextUrl.searchParams.get("holdingId") ?? undefined;
-    const limitRaw = req.nextUrl.searchParams.get("limit");
-    const limit =
-      limitRaw != null
-        ? Math.min(Math.max(parseInt(limitRaw, 10) || 0, 0), 100)
-        : undefined;
+export const GET = withApi(async ({ user, req }) => {
+  const url = new URL(req.url);
+  const holdingId = url.searchParams.get("holdingId") ?? undefined;
+  const limitRaw = url.searchParams.get("limit");
+  const limit =
+    limitRaw != null
+      ? Math.min(Math.max(parseInt(limitRaw, 10) || 0, 0), 100)
+      : undefined;
 
-    const transactions = await prisma.transaction.findMany({
-      where: {
+  const transactions = await getTransactionsList(user.id, {
+    holdingId,
+    limit,
+  });
+  return ok(transactions);
+});
+
+export const POST = withApi(async ({ user, req }) => {
+  const body = await req.json();
+  const parsed = transactionCreateSchema.safeParse(body);
+  if (!parsed.success) {
+    return fail(parsed.error.issues[0]?.message ?? "参数错误");
+  }
+
+  const { holdingId, type, amount, shares, nav, fee, tradeDate, note } =
+    parsed.data;
+
+  const holding = await prisma.holding.findFirst({
+    where: { id: holdingId, userId: user.id },
+  });
+  if (!holding) {
+    throw new AppError("持仓不存在", 404);
+  }
+
+  const tradeDateDt = parseTradeDate(tradeDate);
+
+  const [transaction] = await prisma.$transaction(async (tx) => {
+    const created = await tx.transaction.create({
+      data: {
         userId: user.id,
-        ...(holdingId ? { holdingId } : {}),
+        holdingId,
+        type,
+        amount,
+        shares,
+        nav,
+        fee,
+        tradeDate: tradeDateDt,
+        note,
       },
-      include: {
-        holding: { include: { fund: true } },
-      },
-      orderBy: [{ tradeDate: "desc" }, { createdAt: "desc" }],
-      ...(limit ? { take: limit } : {}),
     });
-    return ok(transactions);
-  } catch (error) {
-    if (error instanceof Error && error.message === "UNAUTHORIZED") {
-      return unauthorized();
-    }
-    return fail(toErrorMessage(error), 500);
-  }
-}
 
-export async function POST(req: NextRequest) {
-  try {
-    const user = await requireUser();
-    const body = await req.json();
-    const parsed = transactionCreateSchema.safeParse(body);
-    if (!parsed.success) {
-      return fail(parsed.error.issues[0]?.message ?? "参数错误");
-    }
+    await syncHoldingFromLedger(tx, holdingId, user.id);
 
-    const { holdingId, type, amount, shares, nav, fee, tradeDate, note } =
-      parsed.data;
+    return [created];
+  });
 
-    const holding = await prisma.holding.findFirst({
-      where: { id: holdingId, userId: user.id },
-    });
-    if (!holding) {
-      return fail("持仓不存在", 404);
-    }
-
-    const result = applyTransactionEffect(
-      holding.shares,
-      holding.costAmount,
-      type,
-      shares,
-      amount,
-      fee,
-    );
-    const nextShares = result.shares;
-    const nextCost = result.costAmount;
-
-    const [transaction] = await prisma.$transaction([
-      prisma.transaction.create({
-        data: {
-          userId: user.id,
-          holdingId,
-          type,
-          amount,
-          shares,
-          nav,
-          fee,
-          tradeDate: new Date(tradeDate),
-          note,
-        },
-      }),
-      prisma.holding.update({
-        where: { id: holdingId },
-        data: {
-          shares: nextShares,
-          costAmount: nextCost,
-        },
-      }),
-    ]);
-
-    return ok(transaction, { status: 201 });
-  } catch (error) {
-    if (error instanceof Error && error.message === "UNAUTHORIZED") {
-      return unauthorized();
-    }
-    return fail(toErrorMessage(error), 500);
-  }
-}
+  return ok(transaction, { status: 201 });
+});

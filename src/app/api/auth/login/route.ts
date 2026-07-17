@@ -1,4 +1,3 @@
-import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import {
   createSessionToken,
@@ -7,9 +6,15 @@ import {
 } from "@/lib/auth";
 import { fail, ok, toErrorMessage } from "@/lib/api";
 import { loginSchema } from "@/lib/validators";
+import { rateLimit, clientKey } from "@/lib/rate-limit";
 
-export async function POST(req: NextRequest) {
+export async function POST(req: Request) {
   try {
+    const rl = rateLimit(clientKey(req, "login"), 10, 60000);
+    if (!rl.ok) {
+      return fail("登录尝试过于频繁，请稍后再试", 429, { retryAfterSec: rl.retryAfterSec });
+    }
+
     const body = await req.json();
     const parsed = loginSchema.safeParse(body);
     if (!parsed.success) {
@@ -34,6 +39,7 @@ export async function POST(req: NextRequest) {
       id: user.id,
       email: user.email,
       name: user.name,
+      avatarUrl: user.avatarUrl,
       createdAt: user.createdAt,
     });
   } catch (error) {

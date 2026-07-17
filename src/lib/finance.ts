@@ -1,11 +1,26 @@
+export type LedgerTx = {
+  type: string
+  amount: number
+  shares: number
+  fee: number
+  tradeDate: Date | string
+  createdAt?: Date | string
+  id?: string
+}
+
+export type HoldingState = {
+  shares: number
+  costAmount: number
+}
+
 export function roundMoney(value: number, digits = 4) {
-  const factor = 10 ** digits;
-  return Math.round((value + Number.EPSILON) * factor) / factor;
+  const factor = 10 ** digits
+  return Math.round((value + Number.EPSILON) * factor) / factor
 }
 
 export function calcMarketValue(shares: number, nav: number | null | undefined) {
-  if (!nav) return 0;
-  return roundMoney(shares * nav, 4);
+  if (!nav) return 0
+  return roundMoney(shares * nav, 4)
 }
 
 /** 优先用实时估值算市值，否则回退单位净值 */
@@ -15,9 +30,9 @@ export function calcEstimateValue(
   nav: number | null | undefined,
 ) {
   if (estimateNav != null && estimateNav > 0) {
-    return calcMarketValue(shares, estimateNav);
+    return calcMarketValue(shares, estimateNav)
   }
-  return calcMarketValue(shares, nav);
+  return calcMarketValue(shares, nav)
 }
 
 /**
@@ -32,19 +47,14 @@ export function calcDayProfit(
   nav: number | null | undefined,
   estimateChangePct: number | null | undefined,
 ): number | null {
-  if (shares <= 0) return null;
-  if (
-    estimateNav != null &&
-    nav != null &&
-    estimateNav > 0 &&
-    nav > 0
-  ) {
-    return roundMoney(shares * (estimateNav - nav), 4);
+  if (shares <= 0) return null
+  if (estimateNav != null && nav != null && estimateNav > 0 && nav > 0) {
+    return roundMoney(shares * (estimateNav - nav), 4)
   }
   if (estimateChangePct != null && nav != null && nav > 0) {
-    return roundMoney(shares * nav * (estimateChangePct / 100), 4);
+    return roundMoney(shares * nav * (estimateChangePct / 100), 4)
   }
-  return null;
+  return null
 }
 
 /** 今日收益率：相对「昨收」市值（份额×单位净值） */
@@ -53,19 +63,63 @@ export function calcDayProfitRate(
   shares: number,
   nav: number | null | undefined,
 ): number | null {
-  if (dayProfit == null) return null;
-  const base = calcMarketValue(shares, nav);
-  if (base <= 0) return null;
-  return roundMoney(dayProfit / base, 6);
+  if (dayProfit == null) return null
+  const base = calcMarketValue(shares, nav)
+  if (base <= 0) return null
+  return roundMoney(dayProfit / base, 6)
 }
 
 export function calcProfit(marketValue: number, costAmount: number) {
-  return roundMoney(marketValue - costAmount, 4);
+  return roundMoney(marketValue - costAmount, 4)
 }
 
 export function calcProfitRate(profit: number, costAmount: number) {
-  if (costAmount <= 0) return 0;
-  return roundMoney(profit / costAmount, 6);
+  if (costAmount <= 0) return 0
+  return roundMoney(profit / costAmount, 6)
+}
+
+/**
+ * 净值是否已确认（盘后）。
+ * 规则：单位净值日期(navDate)是今天 → 当日净值已公布，视为已确认；
+ * 或估值时间(estimateTime)存在但不是今天 → 盘中估值已过期，视为已确认。
+ * 其余情况按"估值中"处理。
+ */
+export function isNavSettled(
+  navDate: Date | string | null | undefined,
+  estimateTime: Date | string | null | undefined,
+  now: Date = new Date(),
+): boolean {
+  const today = now.toISOString().slice(0, 10)
+  // 当日单位净值已公布 -> 肯定是已确认
+  if (navDate) {
+    const navDateStr =
+      navDate instanceof Date
+        ? navDate.toISOString().slice(0, 10)
+        : String(navDate).slice(0, 10)
+    if (navDateStr === today) return true
+  }
+  // 以北京时间(UTC+8)判断交易时段
+  const cst = new Date(now.getTime() + (480 + now.getTimezoneOffset()) * 60000)
+  const day = cst.getDay()
+  const isWeekend = day === 0 || day === 6
+  const hour = cst.getHours()
+  const minute = cst.getMinutes()
+  // 周末/节假日 -> 已确认
+  if (isWeekend) return true
+  // 盘前(09:30 前) 或 盘后(15:00 及之后) -> 用已确认净值
+  if (hour < 9 || (hour === 9 && minute < 30)) return true
+  if (hour >= 15) return true
+  // 交易时段内：若今日估值已生成则视为估值中，否则已确认
+  if (estimateTime) {
+    const estStr = String(estimateTime).slice(0, 10)
+    if (estStr === today) return false
+  }
+  return true
+}
+
+/** 买入净投入（计入成本）：金额 + 手续费 */
+export function buyNetAmount(amount: number, fee: number) {
+  return roundMoney(amount + fee, 4)
 }
 
 export function applyBuy(
@@ -73,64 +127,36 @@ export function applyBuy(
   costAmount: number,
   buyShares: number,
   buyAmount: number,
-) {
+): HoldingState {
   return {
     shares: roundMoney(shares + buyShares, 4),
     costAmount: roundMoney(costAmount + buyAmount, 4),
-  };
+  }
 }
 
+/**
+ * 卖出：按份额比例扣减成本（移动平均成本法）。
+ * 成本扣减与成交金额无关，保证冲销/重放可逆。
+ */
 export function applySell(
   shares: number,
   costAmount: number,
   sellShares: number,
-) {
+): HoldingState {
   if (sellShares > shares + 1e-9) {
-    throw new Error("卖出份额不能超过持仓份额");
+    throw new Error("卖出份额不能超过持仓份额")
   }
   if (shares === 0) {
-    return { shares: 0, costAmount: 0 };
+    return { shares: 0, costAmount: 0 }
   }
-  const ratio = sellShares / shares;
+  const ratio = sellShares / shares
+  const nextShares = roundMoney(shares - sellShares, 4)
+  const nextCost =
+    nextShares <= 1e-9 ? 0 : roundMoney(costAmount * (1 - ratio), 4)
   return {
-    shares: roundMoney(shares - sellShares, 4),
-    costAmount: roundMoney(costAmount * (1 - ratio), 4),
-  };
-}
-
-/**
- * 冲销一笔交易对持仓的影响。
- * BUY/SIP：按记账时加入的净金额精确扣回（amount+fee），不用比例卖出，避免成本漂移。
- * SELL：按卖出时减少的份额与（amount-fee）近似加回成本（与历史 DELETE 行为一致的可逆路径）。
- */
-export function reverseTransactionEffect(
-  shares: number,
-  costAmount: number,
-  type: string,
-  txShares: number,
-  amount: number,
-  fee: number,
-) {
-  if (type === "BUY" || type === "SIP") {
-    const netAmount = amount + fee;
-    const nextShares = roundMoney(shares - txShares, 4);
-    if (nextShares < -1e-9) {
-      throw new Error("冲销后份额不能为负");
-    }
-    const nextCost = roundMoney(costAmount - netAmount, 4);
-    if (nextCost < -1e-9) {
-      throw new Error("冲销后成本不能为负，请检查交易与持仓是否一致");
-    }
-    return {
-      shares: nextShares < 0 ? 0 : nextShares,
-      costAmount: nextCost < 0 ? 0 : nextCost,
-    };
+    shares: nextShares <= 1e-9 ? 0 : nextShares,
+    costAmount: nextCost < 0 ? 0 : nextCost,
   }
-  if (type === "SELL") {
-    const netAmount = amount - fee;
-    return applyBuy(shares, costAmount, txShares, netAmount);
-  }
-  throw new Error(`未知交易类型: ${type}`);
 }
 
 /** 应用一笔交易对持仓的影响 */
@@ -141,13 +167,93 @@ export function applyTransactionEffect(
   txShares: number,
   amount: number,
   fee: number,
-) {
+): HoldingState {
   if (type === "BUY" || type === "SIP") {
-    const netAmount = amount + fee;
-    return applyBuy(shares, costAmount, txShares, netAmount);
+    return applyBuy(shares, costAmount, txShares, buyNetAmount(amount, fee))
   }
   if (type === "SELL") {
-    return applySell(shares, costAmount, txShares);
+    return applySell(shares, costAmount, txShares)
   }
-  throw new Error(`未知交易类型: ${type}`);
+  throw new Error(`未知交易类型: ${type}`)
+}
+
+function txTime(value: Date | string | undefined): number {
+  if (!value) return 0
+  const t = value instanceof Date ? value.getTime() : new Date(value).getTime()
+  return Number.isFinite(t) ? t : 0
+}
+
+/** 交易回放顺序：成交日 → 创建时间 → id */
+export function compareLedgerTx(a: LedgerTx, b: LedgerTx): number {
+  const byTrade = txTime(a.tradeDate) - txTime(b.tradeDate)
+  if (byTrade !== 0) return byTrade
+  const byCreated = txTime(a.createdAt) - txTime(b.createdAt)
+  if (byCreated !== 0) return byCreated
+  return (a.id ?? "").localeCompare(b.id ?? "")
+}
+
+/**
+ * 从交易流水重算持仓（唯一账本真源）。
+ * 编辑/删除交易后应调用此函数，避免冲销近似误差。
+ */
+export function rebuildHoldingFromTransactions(
+  transactions: LedgerTx[],
+): HoldingState {
+  let shares = 0
+  let costAmount = 0
+  const ordered = [...transactions].sort(compareLedgerTx)
+  for (const tx of ordered) {
+    const next = applyTransactionEffect(
+      shares,
+      costAmount,
+      tx.type,
+      tx.shares,
+      tx.amount,
+      tx.fee,
+    )
+    shares = next.shares
+    costAmount = next.costAmount
+  }
+  return { shares, costAmount }
+}
+
+/**
+ * @deprecated 仅兼容旧调用；新逻辑请用 rebuildHoldingFromTransactions
+ */
+export function reverseTransactionEffect(
+  shares: number,
+  costAmount: number,
+  type: string,
+  txShares: number,
+  amount: number,
+  fee: number,
+): HoldingState {
+  if (type === "BUY" || type === "SIP") {
+    const netAmount = buyNetAmount(amount, fee)
+    const nextShares = roundMoney(shares - txShares, 4)
+    if (nextShares < -1e-9) {
+      throw new Error("冲销后份额不能为负")
+    }
+    const nextCost = roundMoney(costAmount - netAmount, 4)
+    if (nextCost < -1e-9) {
+      throw new Error("冲销后成本不能为负，请检查交易与持仓是否一致")
+    }
+    return {
+      shares: nextShares < 0 ? 0 : nextShares,
+      costAmount: nextCost < 0 ? 0 : nextCost,
+    }
+  }
+  if (type === "SELL") {
+    const sharesBefore = roundMoney(shares + txShares, 4)
+    if (sharesBefore <= 1e-9) {
+      return applyBuy(shares, costAmount, txShares, 0)
+    }
+    const costBefore =
+      shares <= 1e-9
+        ? 0
+        : roundMoney((costAmount * sharesBefore) / shares, 4)
+    const costBack = roundMoney(costBefore - costAmount, 4)
+    return applyBuy(shares, costAmount, txShares, Math.max(0, costBack))
+  }
+  throw new Error(`未知交易类型: ${type}`)
 }
