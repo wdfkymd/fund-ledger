@@ -200,8 +200,10 @@ export function DashboardClient({ initial }: { initial: DashboardPayload }) {
             {indices.map((idx, i) => (
               <motion.div
                 key={idx.code}
-                className="flex shrink-0 items-center gap-2 rounded-full border bg-muted/30 px-3 py-1.5"
+                className="flex shrink-0 items-center gap-2 rounded-full border bg-muted/30 px-3 py-1.5 cursor-pointer"
                 {...staggerItem(i)}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
               >
                 <span className="text-[11px] text-muted-foreground whitespace-nowrap">
                   {idx.name}
@@ -280,7 +282,12 @@ export function DashboardClient({ initial }: { initial: DashboardPayload }) {
           )}
         </div>
 
-        <div className="mt-8 grid grid-cols-3 items-start divide-x rounded-xl border bg-muted/40 py-3.5 sm:py-4">
+        <motion.div
+          className="mt-8 grid grid-cols-3 items-start divide-x rounded-xl border bg-muted/40 py-3.5 sm:py-4"
+          whileHover={{ scale: 1.015 }}
+          whileTap={{ scale: 0.985 }}
+          transition={{ type: "spring", stiffness: 400, damping: 25 }}
+        >
           <MetricCell
             label="总成本"
             value={<AnimatedNumber value={cost} formatFn={fmt} />}
@@ -295,7 +302,7 @@ export function DashboardClient({ initial }: { initial: DashboardPayload }) {
             value={<AnimatedNumber value={profitRate} formatFn={fmtPct} />}
             valueClassName={tone(profitRate)}
           />
-        </div>
+        </motion.div>
       </section>
 
       <section>
@@ -371,6 +378,9 @@ export function DashboardClient({ initial }: { initial: DashboardPayload }) {
                     key={h.id}
                     className="px-4 py-3.5 sm:px-5"
                     {...staggerItem(i)}
+                    whileHover={{ scale: 1.01 }}
+                    whileTap={{ scale: 0.99 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 25 }}
                   >
                     <div className="flex items-baseline justify-between gap-6">
                       <div className="min-w-0">
@@ -460,6 +470,9 @@ export function DashboardClient({ initial }: { initial: DashboardPayload }) {
                   key={item.id}
                   className="px-4 py-3.5 sm:px-5"
                   {...staggerItem(i)}
+                  whileHover={{ scale: 1.01 }}
+                  whileTap={{ scale: 0.99 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 25 }}
                 >
                   <div className="flex items-baseline justify-between gap-6">
                     <div className="min-w-0">
