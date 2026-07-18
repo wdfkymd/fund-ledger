@@ -303,6 +303,17 @@ export function DashboardClient({ initial }: { initial: DashboardPayload }) {
             valueClassName={tone(profitRate)}
           />
         </motion.div>
+        {refreshing && (
+          <motion.div
+            className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-background/50 backdrop-blur-[0.5px]"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <RefreshCwIcon className="size-5 animate-spin text-muted-foreground" />
+          </motion.div>
+        )}
       </section>
 
       <section>
