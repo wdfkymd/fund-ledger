@@ -347,13 +347,13 @@ export function DashboardClient({ initial }: { initial: DashboardPayload }) {
           </Link>
         </div>
 
-        <AnimatePresence mode="wait" initial={false}>
+        <AnimatePresence mode="wait">
           <motion.div
             key={tab}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, transition: { duration: 0.1 } }}
-            transition={{ duration: 0.15 }}
+            transition={{ duration: 0.2 }}
           >
         {tab === "holdings" ? (
           holdings.length === 0 ? (
@@ -557,7 +557,12 @@ export function DashboardClient({ initial }: { initial: DashboardPayload }) {
           </Link>
         </div>
         {recentTxs.length === 0 ? (
-          <div className="rounded-xl border border-dashed py-8 text-center">
+          <motion.div
+            className="rounded-xl border border-dashed py-8 text-center"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25 }}
+          >
             <p className="text-sm text-muted-foreground">暂无交易</p>
             <Link
               href="/transactions"
@@ -565,7 +570,7 @@ export function DashboardClient({ initial }: { initial: DashboardPayload }) {
             >
               去记一笔
             </Link>
-          </div>
+          </motion.div>
         ) : (
           <ul className="divide-y overflow-hidden rounded-xl border">
             {recentTxs.map((tx) => {
