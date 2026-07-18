@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect } from "react"
 import Link from "next/link"
 import { motion } from "motion/react"
 import { toast } from "sonner"
+import { AnimatedNumber } from "@/components/animated-number"
 import { Skeleton } from "@/components/ui/skeleton"
 import { container as containerV, staggerItem } from "@/lib/motion-variants"
 import { Button } from "@/components/ui/button"
@@ -75,7 +76,7 @@ function MetricCell({
   valueClassName,
 }: {
   label: string
-  value: string
+  value: React.ReactNode
   valueClassName?: string
 }) {
   return (
@@ -256,7 +257,7 @@ export function DashboardClient({ initial }: { initial: DashboardPayload }) {
 
         <p className="text-xs tracking-wide text-muted-foreground">总资产</p>
         <p className="mt-3 text-[2.25rem] font-semibold leading-none tracking-tight tabular-nums sm:text-[2.75rem]">
-          {fmt(assets)}
+          <AnimatedNumber value={assets} formatFn={fmt} />
         </p>
 
         <div className="mt-4 space-y-1">
@@ -265,7 +266,7 @@ export function DashboardClient({ initial }: { initial: DashboardPayload }) {
               "今日 —"
             ) : (
               <>
-                今日 {signedMoney(day)}
+                今日 <AnimatedNumber value={day} formatFn={signedMoney} />
                 {dayRate != null && (
                   <span className="ml-1.5 font-normal">{fmtPct(dayRate)}</span>
                 )}
@@ -280,15 +281,18 @@ export function DashboardClient({ initial }: { initial: DashboardPayload }) {
         </div>
 
         <div className="mt-8 grid grid-cols-3 items-start divide-x rounded-xl border bg-muted/40 py-3.5 sm:py-4">
-          <MetricCell label="总成本" value={fmt(cost)} />
+          <MetricCell
+            label="总成本"
+            value={<AnimatedNumber value={cost} formatFn={fmt} />}
+          />
           <MetricCell
             label={settled ? "累计盈亏" : "预估盈亏"}
-            value={signedMoney(profit)}
+            value={<AnimatedNumber value={profit} formatFn={signedMoney} />}
             valueClassName={tone(profit)}
           />
           <MetricCell
             label={settled ? "收益率" : "预估率"}
-            value={fmtPct(profitRate)}
+            value={<AnimatedNumber value={profitRate} formatFn={fmtPct} />}
             valueClassName={tone(profitRate)}
           />
         </div>
