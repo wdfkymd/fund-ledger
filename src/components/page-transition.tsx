@@ -17,12 +17,12 @@ export function PageTransition({ children }: { children: React.ReactNode }) {
         className="flex flex-1 flex-col"
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -8 }}
-        transition={{
-          duration: DURATION.normal,
-          ease: EASE.enter,
-          exit: { duration: DURATION.fast, ease: EASE.exit },
+        exit={{
+          opacity: 0,
+          y: -8,
+          transition: { duration: DURATION.fast, ease: EASE.exit },
         }}
+        transition={{ duration: DURATION.normal, ease: EASE.enter }}
       >
         {children}
       </motion.div>
