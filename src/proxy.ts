@@ -1,3 +1,6 @@
+// 本文件是 Next.js 16 的 Proxy 约定（原 middleware.ts 改名而来），
+// src/proxy.ts + 具名导出 proxy() 会被框架自动挂载，勿改名/勿删除。
+// 构建产物路由表末尾的 "ƒ Proxy (Middleware)" 可佐证其生效。
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 import { SESSION_COOKIE_NAME } from "@/lib/session"
