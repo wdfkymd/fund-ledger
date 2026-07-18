@@ -19,6 +19,7 @@ import {
   BriefcaseIcon,
 } from "lucide-react"
 import { motion } from "motion/react"
+import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { container as containerV, staggerItem } from "@/lib/motion-variants"
 import { useRouter } from "next/navigation"
@@ -73,8 +74,26 @@ export function WatchlistClient({ initial }: { initial: WatchItem[] }) {
     async (silent = false) => {
       if (!silent) setRefreshing(true)
       try {
-        await fetch("/api/funds", { method: "POST" })
+        const r = await fetch("/api/funds", { method: "POST" })
+        const d = await r.json().catch(() => null)
         await fetchItems()
+        // 静默刷新（进入页面自动触发）不弹 toast，避免打扰
+        if (!silent) {
+          if (d?.ok) {
+            const { total, success, fail } = d.data as {
+              total: number
+              success: number
+              fail: number
+            }
+            if (fail > 0) {
+              toast.warning(`刷新完成：${success} 只成功，${fail} 只失败`)
+            } else if (total > 0) {
+              toast.success(`刷新完成：${total} 只基金净值已更新`)
+            }
+          } else {
+            toast.error(d?.error ?? "刷新失败，请稍后再试")
+          }
+        }
       } finally {
         if (!silent) setRefreshing(false)
       }

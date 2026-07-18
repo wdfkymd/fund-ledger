@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect } from "react"
 import Link from "next/link"
 import { motion } from "motion/react"
+import { toast } from "sonner"
 import { Skeleton } from "@/components/ui/skeleton"
 import { container as containerV, staggerItem } from "@/lib/motion-variants"
 import { Button } from "@/components/ui/button"
@@ -16,6 +17,14 @@ type Summary = DashboardPayload["summary"]
 type MarketIndex = DashboardPayload["indices"][number]
 type RecentTx = DashboardPayload["recentTxs"][number]
 type ListTab = "holdings" | "watchlist"
+
+/** POST /api/funds 返回的刷新摘要 */
+type RefreshSummary = {
+  total: number
+  success: number
+  fail: number
+  durationMs: number
+}
 
 const TX_LABEL: Record<string, string> = {
   BUY: "买入",
@@ -142,8 +151,19 @@ export function DashboardClient({ initial }: { initial: DashboardPayload }) {
   const handleRefresh = useCallback(async () => {
     setRefreshing(true)
     try {
-      await fetch("/api/funds", { method: "POST" })
+      const r = await fetch("/api/funds", { method: "POST" })
+      const d = await r.json().catch(() => null)
       await fetchData()
+      if (d?.ok) {
+        const { total, success, fail } = d.data as RefreshSummary
+        if (fail > 0) {
+          toast.warning(`刷新完成：${success} 只成功，${fail} 只失败`)
+        } else if (total > 0) {
+          toast.success(`刷新完成：${total} 只基金净值已更新`)
+        }
+      } else {
+        toast.error(d?.error ?? "刷新失败，请稍后再试")
+      }
     } finally {
       setRefreshing(false)
     }

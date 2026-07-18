@@ -27,6 +27,7 @@ export const GET = withApi(async ({ req }) => {
 });
 
 export const POST = withApi(async ({ user }) => {
+  const startedAt = Date.now();
   // 刷新持仓 + 自选相关基金（去重）
   const [holdings, watchlist] = await Promise.all([
     prisma.holding.findMany({
@@ -128,5 +129,13 @@ export const POST = withApi(async ({ user }) => {
     }
   }
 
-  return ok(results);
+  const success = results.filter((r) => r.ok).length;
+  // 明细 + 摘要：前端 toast 用摘要，明细保留逐只结果便于排查
+  return ok({
+    total: results.length,
+    success,
+    fail: results.length - success,
+    durationMs: Date.now() - startedAt,
+    results,
+  });
 });
