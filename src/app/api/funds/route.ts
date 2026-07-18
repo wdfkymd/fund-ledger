@@ -5,6 +5,9 @@ import {
   searchFundsFromEastMoney,
 } from "@/lib/fund-api";
 
+/** 单批并发数：eastmoney 对高频请求会限流，串行太慢、全并发易被封，取折中 */
+const REFRESH_CONCURRENCY = 4;
+
 export const GET = withApi(async ({ req }) => {
   const url = new URL(req.url);
   const keyword = url.searchParams.get("q") ?? "";
@@ -36,16 +39,14 @@ export const POST = withApi(async ({ user }) => {
     }),
   ]);
 
-  const fundMap = new Map<
-    string,
-    {
-      fundId: string;
-      code: string;
-      name: string;
-      nav: number | null;
-      navDate: Date | null;
-    }
-  >();
+  type FundEntry = {
+    fundId: string;
+    code: string;
+    name: string;
+    nav: number | null;
+    navDate: Date | null;
+  };
+  const fundMap = new Map<string, FundEntry>();
   for (const h of holdings) {
     fundMap.set(h.fundId, {
       fundId: h.fundId,
@@ -67,8 +68,7 @@ export const POST = withApi(async ({ user }) => {
     }
   }
 
-  const results = [];
-  for (const entry of fundMap.values()) {
+  const refreshOne = async (entry: FundEntry) => {
     try {
       const info = await fetchFundFromEastMoney(entry.code);
       const updated = await prisma.fund.update({
@@ -102,13 +102,29 @@ export const POST = withApi(async ({ user }) => {
         });
       }
 
-      results.push({ fundId: entry.fundId, ok: true, fund: updated });
+      return { fundId: entry.fundId, ok: true as const, fund: updated };
     } catch (error) {
-      results.push({
+      return {
         fundId: entry.fundId,
-        ok: false,
+        ok: false as const,
         error: error instanceof Error ? error.message : "更新失败",
-      });
+      };
+    }
+  };
+
+  // 分批并发刷新：批内 allSettled 互不阻塞，批间串行避免触发 eastmoney 限流
+  const entries = Array.from(fundMap.values());
+  const results: Awaited<ReturnType<typeof refreshOne>>[] = [];
+  for (let i = 0; i < entries.length; i += REFRESH_CONCURRENCY) {
+    const batch = entries.slice(i, i + REFRESH_CONCURRENCY);
+    const settled = await Promise.allSettled(batch.map(refreshOne));
+    for (const s of settled) {
+      // refreshOne 内部已捕获异常，rejected 仅为兜底防御
+      results.push(
+        s.status === "fulfilled"
+          ? s.value
+          : { fundId: "", ok: false as const, error: "更新失败" },
+      );
     }
   }
 
