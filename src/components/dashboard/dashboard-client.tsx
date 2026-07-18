@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react"
 import Link from "next/link"
-import { motion } from "motion/react"
+import { AnimatePresence, motion } from "motion/react"
 import { toast } from "sonner"
 import { AnimatedNumber } from "@/components/animated-number"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -340,6 +340,14 @@ export function DashboardClient({ initial }: { initial: DashboardPayload }) {
           </Link>
         </div>
 
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={tab}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0, transition: { duration: 0.1 } }}
+            transition={{ duration: 0.15 }}
+          >
         {tab === "holdings" ? (
           holdings.length === 0 ? (
             <div className="rounded-xl border border-dashed py-12 text-center">
@@ -353,13 +361,17 @@ export function DashboardClient({ initial }: { initial: DashboardPayload }) {
             </div>
           ) : (
             <ul className="divide-y overflow-hidden rounded-xl border">
-              {holdings.map((h) => {
+              {holdings.map((h, i) => {
                 const hSettled = !h.isEstimate
                 const dp = h.dayProfit
                 const dpr = h.dayProfitRate
                 const chg = h.fund.estimateChangePct
                 return (
-                  <li key={h.id} className="px-4 py-3.5 sm:px-5">
+                  <motion.li
+                    key={h.id}
+                    className="px-4 py-3.5 sm:px-5"
+                    {...staggerItem(i)}
+                  >
                     <div className="flex items-baseline justify-between gap-6">
                       <div className="min-w-0">
                         <Link
@@ -422,7 +434,7 @@ export function DashboardClient({ initial }: { initial: DashboardPayload }) {
                         </span>
                       </span>
                     </p>
-                  </li>
+                  </motion.li>
                 )
               })}
             </ul>
@@ -439,12 +451,16 @@ export function DashboardClient({ initial }: { initial: DashboardPayload }) {
           </div>
         ) : (
           <ul className="divide-y overflow-hidden rounded-xl border">
-            {watchlist.map((item) => {
+            {watchlist.map((item, i) => {
               const chg = item.fund.estimateChangePct
               const est = item.fund.estimateNav
               const nav = item.fund.nav
               return (
-                <li key={item.id} className="px-4 py-3.5 sm:px-5">
+                <motion.li
+                  key={item.id}
+                  className="px-4 py-3.5 sm:px-5"
+                  {...staggerItem(i)}
+                >
                   <div className="flex items-baseline justify-between gap-6">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
@@ -508,11 +524,13 @@ export function DashboardClient({ initial }: { initial: DashboardPayload }) {
                       </>
                     )}
                   </p>
-                </li>
+                </motion.li>
               )
             })}
           </ul>
         )}
+          </motion.div>
+        </AnimatePresence>
       </section>
 
       <section className="mt-8">
