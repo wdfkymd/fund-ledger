@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react"
 import Link from "next/link"
-import { AnimatePresence, motion } from "motion/react"
+import { motion } from "motion/react"
 import { toast } from "sonner"
 import { AnimatedNumber } from "@/components/animated-number"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -114,13 +114,16 @@ export function DashboardClient({ initial }: { initial: DashboardPayload }) {
 
   useEffect(() => {
     if (initial.indices.length > 0) return
-    fetch("/api/market/indices")
+    let ignore = false
+    const ctl = new AbortController()
+    fetch("/api/market/indices", { signal: ctl.signal })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
-        if (d?.data?.indices) setIndices(d.data.indices)
+        if (!ignore && d?.data?.indices) setIndices(d.data.indices)
       })
       .catch(() => {})
-      .finally(() => setIndicesLoading(false))
+      .finally(() => { if (!ignore) setIndicesLoading(false) })
+    return () => { ignore = true; ctl.abort() }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchData = useCallback(async () => {
@@ -358,14 +361,6 @@ export function DashboardClient({ initial }: { initial: DashboardPayload }) {
           </Link>
         </div>
 
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={tab}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, transition: { duration: 0.1 } }}
-            transition={{ duration: 0.2 }}
-          >
         {tab === "holdings" ? (
           holdings.length === 0 ? (
             <div className="rounded-xl border border-dashed py-12 text-center">
@@ -378,7 +373,7 @@ export function DashboardClient({ initial }: { initial: DashboardPayload }) {
               </Link>
             </div>
           ) : (
-            <ul className="divide-y overflow-hidden rounded-xl border">
+            <motion.div className="divide-y overflow-hidden rounded-xl border" {...containerV}>
               {holdings.map((h, i) => {
                 const hSettled = !h.isEstimate
                 const dp = h.dayProfit
@@ -458,7 +453,7 @@ export function DashboardClient({ initial }: { initial: DashboardPayload }) {
                   </motion.li>
                 )
               })}
-            </ul>
+            </motion.div>
           )
         ) : watchlist.length === 0 ? (
           <div className="rounded-xl border border-dashed py-12 text-center">
@@ -471,7 +466,7 @@ export function DashboardClient({ initial }: { initial: DashboardPayload }) {
             </Link>
           </div>
         ) : (
-          <ul className="divide-y overflow-hidden rounded-xl border">
+          <motion.div className="divide-y overflow-hidden rounded-xl border" {...containerV}>
             {watchlist.map((item, i) => {
               const chg = item.fund.estimateChangePct
               const est = item.fund.estimateNav
@@ -551,10 +546,8 @@ export function DashboardClient({ initial }: { initial: DashboardPayload }) {
                 </motion.li>
               )
             })}
-          </ul>
-        )}
           </motion.div>
-        </AnimatePresence>
+        )}
       </section>
 
       <section className="mt-8">
@@ -568,12 +561,7 @@ export function DashboardClient({ initial }: { initial: DashboardPayload }) {
           </Link>
         </div>
         {recentTxs.length === 0 ? (
-          <motion.div
-            className="rounded-xl border border-dashed py-8 text-center"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.25 }}
-          >
+          <div className="rounded-xl border border-dashed py-8 text-center">
             <p className="text-sm text-muted-foreground">暂无交易</p>
             <Link
               href="/transactions"
@@ -581,14 +569,14 @@ export function DashboardClient({ initial }: { initial: DashboardPayload }) {
             >
               去记一笔
             </Link>
-          </motion.div>
+          </div>
         ) : (
-          <ul className="divide-y overflow-hidden rounded-xl border">
-            {recentTxs.map((tx) => {
+          <motion.div className="divide-y overflow-hidden rounded-xl border" {...containerV}>
+            {recentTxs.map((tx, i) => {
               const label = TX_LABEL[tx.type] ?? tx.type
               const isSell = tx.type === "SELL"
               return (
-                <li key={tx.id} className="px-4 py-3 sm:px-5">
+                <motion.li key={tx.id} className="px-4 py-3 sm:px-5" {...staggerItem(i)}>
                   <div className="flex items-center justify-between gap-4">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
@@ -628,10 +616,10 @@ export function DashboardClient({ initial }: { initial: DashboardPayload }) {
                       {fmt(tx.amount)}
                     </p>
                   </div>
-                </li>
+                </motion.li>
               )
             })}
-          </ul>
+          </motion.div>
         )}
       </section>
     </div>

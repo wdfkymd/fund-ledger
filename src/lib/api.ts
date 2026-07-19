@@ -79,7 +79,7 @@ export function withApi<R = unknown>(
   return async (req: Request, routeCtx?: R) => {
     try {
       const user = await requireUser();
-      return await fn({ user, req, routeCtx });
+      return await fn({ user, req, routeCtx: routeCtx ?? ({} as R) });
     } catch (error) {
       if (error instanceof AppError) {
         return fail(error.message, error.status, error.details, error.code);

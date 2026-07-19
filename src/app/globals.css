@@ -17,18 +17,21 @@ html.dark {
   background-color: oklch(0.145 0 0);
 }
 
-/* 主题切换过渡 */
-*,
-*::before,
-*::after {
-  transition: background-color 0.3s ease, border-color 0.3s ease;
+/* 主题切换过渡：只作用于 html 根背景色，避免 * 选择器拖慢所有交互 */
+html {
+  transition: background-color 0.3s ease;
 }
 
 @media (prefers-reduced-motion: reduce) {
+  html {
+    transition: none !important;
+  }
   *,
   *::before,
   *::after {
-    transition: none !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
 

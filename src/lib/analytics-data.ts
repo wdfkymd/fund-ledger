@@ -42,9 +42,9 @@ export type AnalyticsFundItem = {
   marketValue: number
   estimateValue: number
   profit: number
-  profitRate: number
+  profitRate: number | null
   estimateProfit: number
-  estimateProfitRate: number
+  estimateProfitRate: number | null
   dayProfit: number | null
   dayProfitRate: number | null
   isEstimate: boolean
@@ -57,9 +57,9 @@ export type AnalyticsPayload = {
     totalMarketValue: number
     totalEstimateValue: number
     totalProfit: number
-    totalProfitRate: number
+    totalProfitRate: number | null
     totalEstimateProfit: number
-    totalEstimateProfitRate: number
+    totalEstimateProfitRate: number | null
     totalDayProfit: number | null
     totalDayProfitRate: number | null
     holdingCount: number

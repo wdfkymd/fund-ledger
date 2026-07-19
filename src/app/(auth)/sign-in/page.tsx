@@ -13,9 +13,11 @@ export default function SignInPage() {
   const router = useRouter()
 
   useEffect(() => {
-    fetch("/api/auth/me")
+    const ctl = new AbortController()
+    fetch("/api/auth/me", { signal: ctl.signal })
       .then((r) => { if (r.ok) router.replace("/dashboard") })
       .catch(() => {})
+    return () => ctl.abort()
   }, [router])
 
   const [email, setEmail] = useState("")

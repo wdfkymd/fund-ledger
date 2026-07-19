@@ -71,9 +71,9 @@ export const GET = withApi(async ({ user, req }) => {
         marketValue,
         estimateValue,
         profit,
-        roundMoney(calcProfitRate(profit, h.costAmount) * 100, 4),
+        roundMoney((calcProfitRate(profit, h.costAmount) ?? 0) * 100, 4),
         estimateProfit,
-        roundMoney(calcProfitRate(estimateProfit, h.costAmount) * 100, 4),
+        roundMoney((calcProfitRate(estimateProfit, h.costAmount) ?? 0) * 100, 4),
         h.note ?? "",
         h.updatedAt.toISOString(),
       ];

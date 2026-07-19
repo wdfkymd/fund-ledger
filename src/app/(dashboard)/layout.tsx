@@ -3,7 +3,6 @@ import path from "node:path"
 import { AppSidebar } from "@/components/app-sidebar"
 import { DynamicBreadcrumb } from "@/components/dynamic-breadcrumb"
 import { NavUser } from "@/components/nav-user"
-import { PageTransition } from "@/components/page-transition"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Separator } from "@/components/ui/separator"
 import {
@@ -71,9 +70,7 @@ export default async function DashboardLayout({
               <NavUser user={navUser} />
             </div>
           </header>
-          <main className="flex flex-1 flex-col">
-            <PageTransition>{children}</PageTransition>
-          </main>
+          <main className="flex flex-1 flex-col">{children}</main>
         </SidebarInset>
       </SidebarProvider>
     </TooltipProvider>

@@ -146,6 +146,9 @@ export function WatchlistClient({ initial }: { initial: WatchItem[] }) {
     const r = await fetch(`/api/watchlist/${id}`, { method: "DELETE" })
     if (r.ok) {
       await fetchItems()
+    } else {
+      const d = await r.json().catch(() => null)
+      toast.error(d?.error || "删除失败")
     }
   }
 

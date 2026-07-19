@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useMemo } from "react"
 import { motion } from "motion/react"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -351,7 +352,12 @@ export function TransactionsClient({
   async function handleDelete(id: string) {
     if (!confirm("确定删除该交易？持仓份额与成本会回滚。")) return
     const r = await fetch(`/api/transactions/${id}`, { method: "DELETE" })
-    if (r.ok) await fetchData()
+    if (r.ok) {
+      await fetchData()
+    } else {
+      const d = await r.json().catch(() => null)
+      toast.error(d?.error || "删除失败")
+    }
   }
 
   return (

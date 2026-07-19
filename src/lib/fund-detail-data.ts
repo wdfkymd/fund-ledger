@@ -33,9 +33,9 @@ export type FundDetailPayload = {
     marketValue: number
     estimateValue: number
     profit: number
-    profitRate: number
+    profitRate: number | null
     estimateProfit: number
-    estimateProfitRate: number
+    estimateProfitRate: number | null
     dayProfit: number | null
     dayProfitRate: number | null
     isEstimate: boolean

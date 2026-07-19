@@ -40,22 +40,24 @@ export async function getWatchlistPayload(
   const holdingFundIds = new Set(holdingFunds.map((h) => h.fundId))
 
   return {
-    items: items.map((item) => ({
-      id: item.id,
-      note: item.note,
-      sortOrder: item.sortOrder,
-      isHeld: holdingFundIds.has(item.fundId),
-      fund: {
-        id: item.fund.id,
-        code: item.fund.code,
-        name: item.fund.name,
-        nav: item.fund.nav,
-        estimateNav: item.fund.estimateNav,
-        estimateChangePct: item.fund.estimateChangePct,
-        estimateTime: item.fund.estimateTime,
-      },
-      createdAt: item.createdAt.toISOString(),
-      updatedAt: item.updatedAt.toISOString(),
-    })),
+    items: items
+      .filter((item) => item.fund != null)
+      .map((item) => ({
+        id: item.id,
+        note: item.note,
+        sortOrder: item.sortOrder,
+        isHeld: holdingFundIds.has(item.fundId),
+        fund: {
+          id: item.fund.id,
+          code: item.fund.code,
+          name: item.fund.name,
+          nav: item.fund.nav,
+          estimateNav: item.fund.estimateNav,
+          estimateChangePct: item.fund.estimateChangePct,
+          estimateTime: item.fund.estimateTime,
+        },
+        createdAt: item.createdAt.toISOString(),
+        updatedAt: item.updatedAt.toISOString(),
+      })),
   }
 }

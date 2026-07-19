@@ -60,42 +60,44 @@ export const POST = withApi(async ({ user, req }) => {
     },
   });
 
-  if (fundInfo.nav && fundInfo.navDate) {
-    await prisma.navHistory.upsert({
+  const item = await prisma.$transaction(async (tx) => {
+    const existing = await tx.watchlistItem.findUnique({
       where: {
-        fundId_date: {
+        userId_fundId: {
+          userId: user.id,
           fundId: fund.id,
-          date: new Date(fundInfo.navDate),
         },
       },
-      create: {
-        fundId: fund.id,
-        nav: fundInfo.nav,
-        date: new Date(fundInfo.navDate),
-      },
-      update: { nav: fundInfo.nav },
     });
-  }
+    if (existing) {
+      throw new AppError("该基金已在自选中");
+    }
 
-  const existing = await prisma.watchlistItem.findUnique({
-    where: {
-      userId_fundId: {
+    if (fundInfo.nav && fundInfo.navDate) {
+      await tx.navHistory.upsert({
+        where: {
+          fundId_date: {
+            fundId: fund.id,
+            date: new Date(fundInfo.navDate),
+          },
+        },
+        create: {
+          fundId: fund.id,
+          nav: fundInfo.nav,
+          date: new Date(fundInfo.navDate),
+        },
+        update: { nav: fundInfo.nav },
+      });
+    }
+
+    return tx.watchlistItem.create({
+      data: {
         userId: user.id,
         fundId: fund.id,
+        note,
       },
-    },
-  });
-  if (existing) {
-    throw new AppError("该基金已在自选中");
-  }
-
-  const item = await prisma.watchlistItem.create({
-    data: {
-      userId: user.id,
-      fundId: fund.id,
-      note,
-    },
-    include: { fund: true },
+      include: { fund: true },
+    });
   });
 
   return ok(item, { status: 201 });

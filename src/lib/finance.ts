@@ -74,7 +74,7 @@ export function calcProfit(marketValue: number, costAmount: number) {
 }
 
 export function calcProfitRate(profit: number, costAmount: number) {
-  if (costAmount <= 0) return 0
+  if (costAmount <= 0) return null
   return roundMoney(profit / costAmount, 6)
 }
 
@@ -180,7 +180,10 @@ export function applyTransactionEffect(
 function txTime(value: Date | string | undefined): number {
   if (!value) return 0
   const t = value instanceof Date ? value.getTime() : new Date(value).getTime()
-  return Number.isFinite(t) ? t : 0
+  if (!Number.isFinite(t)) {
+    throw new Error(`无效交易日期: ${value}`)
+  }
+  return t
 }
 
 /** 交易回放顺序：成交日 → 创建时间 → id */
@@ -249,7 +252,7 @@ export function reverseTransactionEffect(
       return applyBuy(shares, costAmount, txShares, 0)
     }
     const costBefore =
-      shares <= 1e-9
+      shares <= 1e-7
         ? 0
         : roundMoney((costAmount * sharesBefore) / shares, 4)
     const costBack = roundMoney(costBefore - costAmount, 4)

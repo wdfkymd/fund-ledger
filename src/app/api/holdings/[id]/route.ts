@@ -27,13 +27,6 @@ export const PATCH = withApi<RouteCtx>(async ({ user, req, routeCtx }) => {
     return fail(parsed.error.issues[0]?.message ?? "参数错误");
   }
 
-  const holding = await prisma.holding.findFirst({
-    where: { id, userId: user.id },
-  });
-  if (!holding) {
-    throw new AppError("持仓不存在", 404);
-  }
-
   const data: Record<string, unknown> = {};
   if (parsed.data.note !== undefined) {
     data.note = parsed.data.note;
@@ -43,10 +36,19 @@ export const PATCH = withApi<RouteCtx>(async ({ user, req, routeCtx }) => {
     return fail("请至少提供一个要修改的字段");
   }
 
-  const updated = await prisma.holding.update({
-    where: { id },
-    data,
-    include: { fund: true },
+  const updated = await prisma.$transaction(async (tx) => {
+    const holding = await tx.holding.findFirst({
+      where: { id, userId: user.id },
+    });
+    if (!holding) {
+      throw new AppError("持仓不存在", 404);
+    }
+
+    return tx.holding.update({
+      where: { id, userId: user.id },
+      data,
+      include: { fund: true },
+    });
   });
 
   return ok(updated);
@@ -54,12 +56,15 @@ export const PATCH = withApi<RouteCtx>(async ({ user, req, routeCtx }) => {
 
 export const DELETE = withApi<RouteCtx>(async ({ user, routeCtx }) => {
   const { id } = await routeCtx!.params;
-  const holding = await prisma.holding.findFirst({
-    where: { id, userId: user.id },
+  await prisma.$transaction(async (tx) => {
+    const holding = await tx.holding.findFirst({
+      where: { id, userId: user.id },
+    });
+    if (!holding) {
+      throw new AppError("持仓不存在", 404);
+    }
+    await tx.transaction.deleteMany({ where: { holdingId: id, userId: user.id } });
+    await tx.holding.delete({ where: { id, userId: user.id } });
   });
-  if (!holding) {
-    throw new AppError("持仓不存在", 404);
-  }
-  await prisma.holding.delete({ where: { id } });
   return ok({ success: true });
 });

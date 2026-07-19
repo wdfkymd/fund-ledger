@@ -30,17 +30,23 @@ export const passwordChangeSchema = z
     path: ["newPassword"],
   });
 
-export const holdingCreateSchema = z.object({
-  fundCode: z
-    .string()
-    .trim()
-    .regex(/^\d{6}$/, "基金代码应为 6 位数字"),
-  fundName: z.string().trim().optional(),
-  shares: z.number().min(0, "份额不能为负数").optional(),
-  costPrice: z.number().min(0, "成本价不能为负数").optional(),
-  costAmount: z.number().min(0, "成本不能为负数").optional(),
-  note: z.string().trim().max(200).optional(),
-});
+export const holdingCreateSchema = z
+  .object({
+    fundCode: z
+      .string()
+      .trim()
+      .regex(/^\d{6}$/, "基金代码应为 6 位数字"),
+    fundName: z.string().trim().optional(),
+    shares: z.number().min(0, "份额不能为负数").optional(),
+    costPrice: z.number().min(0, "成本价不能为负数").optional(),
+    costAmount: z.number().min(0, "成本不能为负数").optional(),
+    tradeDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "交易日期格式应为 YYYY-MM-DD").optional(),
+    note: z.string().trim().max(200).optional(),
+  })
+  .refine(
+    (v) => (v.shares ?? 0) > 0 || (v.costPrice ?? 0) > 0 || (v.costAmount ?? 0) > 0,
+    { message: "请填写份额、成本价或成本金额至少一项", path: ["shares"] },
+  );
 
 export const holdingUpdateSchema = z.object({
   note: z.string().trim().max(200).nullable().optional(),

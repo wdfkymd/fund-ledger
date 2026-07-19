@@ -356,11 +356,11 @@ export function SettingsClient({ initialUser }: { initialUser: UserInfo }) {
                   id="newPassword"
                   type="password"
                   autoComplete="new-password"
-                  placeholder="至少 6 位"
+                  placeholder="至少 8 位"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   required
-                  minLength={6}
+                  minLength={8}
                 />
               </div>
               <div className="space-y-1.5">
@@ -377,7 +377,7 @@ export function SettingsClient({ initialUser }: { initialUser: UserInfo }) {
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
-                  minLength={6}
+                  minLength={8}
                 />
               </div>
             </div>

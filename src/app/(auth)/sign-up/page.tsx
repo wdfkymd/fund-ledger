@@ -13,9 +13,11 @@ export default function SignUpPage() {
   const router = useRouter()
 
   useEffect(() => {
-    fetch("/api/auth/me")
+    const ctl = new AbortController()
+    fetch("/api/auth/me", { signal: ctl.signal })
       .then((r) => { if (r.ok) router.replace("/dashboard") })
       .catch(() => {})
+    return () => ctl.abort()
   }, [router])
 
   const [email, setEmail] = useState("")
@@ -84,11 +86,11 @@ export default function SignUpPage() {
             <Input
               id="password"
               type="password"
-              placeholder="至少 6 位"
+              placeholder="至少 8 位"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              minLength={6}
+              minLength={8}
             />
           </div>
           {error && <p className="text-xs text-red-500">{error}</p>}

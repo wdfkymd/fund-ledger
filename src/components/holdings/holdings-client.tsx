@@ -208,27 +208,17 @@ function HoldingsClientInner({ initial }: { initial: Holding[] }) {
           open={addOpen}
           onOpenChange={(o) => {
             setAddOpen(o)
-            if (!o) setError("")
+            if (!o) {
+              setAddForm(emptyAdd)
+              setError("")
+            }
           }}
         >
           <DialogTrigger render={<Button size="sm" />}>
             <PlusIcon className="mr-1 size-3.5" />
             添加
           </DialogTrigger>
-        </Dialog>
-      </div>
-
-      <Dialog
-        open={addOpen}
-        onOpenChange={(o) => {
-          setAddOpen(o)
-          if (!o) {
-            setAddForm(emptyAdd)
-            setError("")
-          }
-        }}
-      >
-        <DialogContent>
+          <DialogContent>
           <DialogHeader>
             <DialogTitle>添加持仓</DialogTitle>
           </DialogHeader>
@@ -300,6 +290,7 @@ function HoldingsClientInner({ initial }: { initial: Holding[] }) {
           </form>
         </DialogContent>
       </Dialog>
+      </div>
 
       <Dialog
         open={editOpen}

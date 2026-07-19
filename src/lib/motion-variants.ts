@@ -37,11 +37,11 @@ export const fadeIn = {
   transition: { duration: DURATION.normal, ease: EASE.enter },
 }
 
-export function staggerItem(i: number) {
+export function staggerItem(i: number, skipInitial = false) {
   return {
-    initial: item.initial,
+    initial: skipInitial ? false : item.initial,
     animate: item.animate,
-    transition: { ...item.transition, delay: i * STAGGER.item },
+    transition: { ...item.transition, delay: skipInitial ? 0 : i * STAGGER.item },
   }
 }
 

@@ -7,6 +7,8 @@ import {
 
 /** 单批并发数：eastmoney 对高频请求会限流，串行太慢、全并发易被封，取折中 */
 const REFRESH_CONCURRENCY = 4;
+const REFRESH_COOLDOWN_MS = 10_000;
+const refreshCooldowns = new Map<string, number>();
 
 export const GET = withApi(async ({ req }) => {
   const url = new URL(req.url);
@@ -27,6 +29,12 @@ export const GET = withApi(async ({ req }) => {
 });
 
 export const POST = withApi(async ({ user }) => {
+  const lastRefresh = refreshCooldowns.get(user.id);
+  if (lastRefresh && Date.now() - lastRefresh < REFRESH_COOLDOWN_MS) {
+    return fail("刷新太频繁，请稍后再试");
+  }
+  refreshCooldowns.set(user.id, Date.now());
+
   const startedAt = Date.now();
   // 刷新持仓 + 自选相关基金（去重）
   const [holdings, watchlist] = await Promise.all([
@@ -75,7 +83,7 @@ export const POST = withApi(async ({ user }) => {
       const updated = await prisma.fund.update({
         where: { id: entry.fundId },
         data: {
-          name: info.name || entry.name,
+          name: info.name?.trim() || entry.name,
           // 单位净值：仅用 dwjz；勿用估值覆盖
           nav: info.nav ?? entry.nav,
           navDate: info.navDate ? new Date(info.navDate) : entry.navDate,

@@ -54,7 +54,7 @@ export async function syncHoldingFromLedger(
   }
 
   return db.holding.update({
-    where: { id: holdingId },
+    where: { id: holdingId, userId },
     data: {
       shares: next.shares,
       costAmount: next.costAmount,

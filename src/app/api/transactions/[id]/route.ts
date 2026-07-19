@@ -14,13 +14,6 @@ export const PATCH = withApi<RouteCtx>(async ({ user, req, routeCtx }) => {
     return fail(parsed.error.issues[0]?.message ?? "参数错误");
   }
 
-  const tx = await prisma.transaction.findFirst({
-    where: { id, userId: user.id },
-  });
-  if (!tx) {
-    throw new AppError("交易记录不存在", 404);
-  }
-
   const data = parsed.data;
   if (
     data.type === undefined &&
@@ -39,8 +32,15 @@ export const PATCH = withApi<RouteCtx>(async ({ user, req, routeCtx }) => {
     : undefined;
 
   const [transaction] = await prisma.$transaction(async (txDb) => {
+    const tx = await txDb.transaction.findFirst({
+      where: { id, userId: user.id },
+    });
+    if (!tx) {
+      throw new AppError("交易记录不存在", 404);
+    }
+
     const updated = await txDb.transaction.update({
-      where: { id },
+      where: { id, userId: user.id },
       data: {
         ...(data.type !== undefined ? { type: data.type } : {}),
         ...(data.amount !== undefined ? { amount: data.amount } : {}),
@@ -66,15 +66,15 @@ export const PATCH = withApi<RouteCtx>(async ({ user, req, routeCtx }) => {
 export const DELETE = withApi<RouteCtx>(async ({ user, routeCtx }) => {
   const { id } = await routeCtx!.params;
 
-  const tx = await prisma.transaction.findFirst({
-    where: { id, userId: user.id },
-  });
-  if (!tx) {
-    throw new AppError("交易记录不存在", 404);
-  }
-
   await prisma.$transaction(async (txDb) => {
-    await txDb.transaction.delete({ where: { id } });
+    const tx = await txDb.transaction.findFirst({
+      where: { id, userId: user.id },
+    });
+    if (!tx) {
+      throw new AppError("交易记录不存在", 404);
+    }
+
+    await txDb.transaction.delete({ where: { id, userId: user.id } });
     await syncHoldingFromLedger(txDb, tx.holdingId, user.id);
   });
 

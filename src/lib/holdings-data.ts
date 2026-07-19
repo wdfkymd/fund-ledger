@@ -17,10 +17,10 @@ export type HoldingListItem = {
   note: string | null
   marketValue: number
   profit: number
-  profitRate: number
+  profitRate: number | null
   estimateValue: number
   estimateProfit: number
-  estimateProfitRate: number
+  estimateProfitRate: number | null
   dayProfit: number | null
   dayProfitRate: number | null
   isEstimate: boolean
@@ -43,8 +43,8 @@ export type HoldingsSummary = {
   totalProfit: number
   totalEstimateValue: number
   totalEstimateProfit: number
-  totalProfitRate: number
-  totalEstimateProfitRate: number
+  totalProfitRate: number | null
+  totalEstimateProfitRate: number | null
   totalDayProfit: number | null
   totalDayProfitRate: number | null
 }

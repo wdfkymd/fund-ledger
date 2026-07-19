@@ -17,8 +17,8 @@ export type DashboardHolding = {
   estimateValue: number
   profit: number
   estimateProfit: number
-  profitRate: number
-  estimateProfitRate: number
+  profitRate: number | null
+  estimateProfitRate: number | null
   dayProfit: number | null
   dayProfitRate: number | null
   isEstimate: boolean
@@ -51,9 +51,9 @@ export type DashboardSummary = {
   totalMarketValue: number
   totalEstimateValue: number
   totalEstimateProfit: number
-  totalEstimateProfitRate: number
+  totalEstimateProfitRate: number | null
   totalProfit: number
-  totalProfitRate: number
+  totalProfitRate: number | null
   totalDayProfit: number | null
   totalDayProfitRate: number | null
   isEstimate: boolean

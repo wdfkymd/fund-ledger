@@ -31,16 +31,16 @@ export const POST = withApi(async ({ user, req }) => {
   const { holdingId, type, amount, shares, nav, fee, tradeDate, note } =
     parsed.data;
 
-  const holding = await prisma.holding.findFirst({
-    where: { id: holdingId, userId: user.id },
-  });
-  if (!holding) {
-    throw new AppError("持仓不存在", 404);
-  }
-
   const tradeDateDt = parseTradeDate(tradeDate);
 
   const [transaction] = await prisma.$transaction(async (tx) => {
+    const holding = await tx.holding.findFirst({
+      where: { id: holdingId, userId: user.id },
+    });
+    if (!holding) {
+      throw new AppError("持仓不存在", 404);
+    }
+
     const created = await tx.transaction.create({
       data: {
         userId: user.id,
