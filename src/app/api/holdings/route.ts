@@ -4,7 +4,7 @@ import { AppError, fail, ok, withApi } from "@/lib/api";
 import { holdingCreateSchema } from "@/lib/validators";
 import { fetchFundFromEastMoney } from "@/lib/fund-api";
 import { getHoldingsPayload } from "@/lib/holdings-data";
-import { parseTradeDate } from "@/lib/trade-date";
+import { parseTradeDate, todayCST } from "@/lib/trade-date";
 
 export const GET = withApi(async ({ user }) => {
   const payload = await getHoldingsPayload(user.id);
@@ -71,7 +71,7 @@ export const POST = withApi(async ({ user, req }) => {
   const nav = shareValue > 0 ? totalCost / shareValue : 0;
   const tradeDateDt = parsed.data.tradeDate
     ? parseTradeDate(parsed.data.tradeDate)
-    : parseTradeDate(new Date().toISOString().slice(0, 10));
+    : parseTradeDate(todayCST());
 
   try {
     const holding = await prisma.$transaction(async (tx) => {

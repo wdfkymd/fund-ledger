@@ -11,6 +11,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 import { TooltipProvider } from "@/components/ui/tooltip"
+import { redirect } from "next/navigation"
 import { getCurrentUser } from "@/lib/auth"
 
 const MIME_MAP: Record<string, string> = {
@@ -27,6 +28,9 @@ export default async function DashboardLayout({
   children: React.ReactNode
 }) {
   const user = await getCurrentUser()
+  if (!user) {
+    redirect("/sign-in")
+  }
   let avatarUrl: string | null = user?.avatarUrl ?? null
 
   if (avatarUrl) {
@@ -42,14 +46,12 @@ export default async function DashboardLayout({
     }
   }
 
-  const navUser = user
-    ? {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        avatarUrl,
-      }
-    : null
+  const navUser = {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    avatarUrl,
+  }
 
   return (
     <TooltipProvider>

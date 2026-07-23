@@ -1,3 +1,5 @@
+import { todayCST, toDateStringUTC } from "@/lib/trade-date"
+
 export type LedgerTx = {
   type: string
   amount: number
@@ -95,27 +97,29 @@ export function isNavSettled(
   estimateTime: Date | string | null | undefined,
   now: Date = new Date(),
 ): boolean {
-  const today = now.toISOString().slice(0, 10)
+  // 统一用北京时间日历日，避免 UTC「今天」与盘中 CST 判断不一致
+  const today = todayCST(now)
   // 当日单位净值已公布 -> 肯定是已确认
   if (navDate) {
     const navDateStr =
       navDate instanceof Date
-        ? navDate.toISOString().slice(0, 10)
+        ? toDateStringUTC(navDate)
         : String(navDate).slice(0, 10)
     if (navDateStr === today) return true
   }
-  // 以北京时间(UTC+8)判断交易时段
-  const cst = new Date(now.getTime() + (480 + now.getTimezoneOffset()) * 60000)
-  const day = cst.getDay()
+  // 以北京时间(UTC+8)判断交易时段（与 todayCST 同一套时钟）
+  const cstMs = now.getTime() + 8 * 60 * 60 * 1000
+  const cst = new Date(cstMs)
+  const day = cst.getUTCDay()
   const isWeekend = day === 0 || day === 6
-  const hour = cst.getHours()
-  const minute = cst.getMinutes()
-  // 周末/节假日 -> 已确认
+  const hour = cst.getUTCHours()
+  const minute = cst.getUTCMinutes()
+  // 周末 -> 已确认（节假日未建模）
   if (isWeekend) return true
   // 盘前(09:30 前) 或 盘后(15:00 及之后) -> 用已确认净值
   if (hour < 9 || (hour === 9 && minute < 30)) return true
   if (hour >= 15) return true
-  // 交易时段内：若今日估值已生成则视为估值中，否则已确认
+  // 交易时段内：若估值时间落在「今天」(CST) 则视为估值中
   if (estimateTime) {
     const estStr = String(estimateTime).slice(0, 10)
     if (estStr === today) return false

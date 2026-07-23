@@ -92,3 +92,106 @@ describe("calcDayProfit — field semantics", () => {
     expect(rate).toBe(-0.0194)
   })
 })
+
+import {
+  applySell,
+  applyBuy,
+  rebuildHoldingFromTransactions,
+  isNavSettled,
+  buyNetAmount,
+} from "@/lib/finance"
+import { todayCST, parseTradeDate } from "@/lib/trade-date"
+
+describe("todayCST / parseTradeDate", () => {
+  it("todayCST is YYYY-MM-DD", () => {
+    expect(todayCST()).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+  })
+  it("parseTradeDate stores UTC noon", () => {
+    const d = parseTradeDate("2026-07-23")
+    expect(d.toISOString()).toBe("2026-07-23T12:00:00.000Z")
+  })
+  it("rejects invalid calendar dates", () => {
+    expect(() => parseTradeDate("2026-02-31")).toThrow()
+  })
+})
+
+describe("ledger rebuild", () => {
+  it("buy then partial sell uses average cost", () => {
+    const state = rebuildHoldingFromTransactions([
+      {
+        id: "1",
+        type: "BUY",
+        amount: 1000,
+        shares: 1000,
+        fee: 0,
+        tradeDate: "2026-01-01",
+        createdAt: "2026-01-01T00:00:00Z",
+      },
+      {
+        id: "2",
+        type: "SELL",
+        amount: 600,
+        shares: 500,
+        fee: 0,
+        tradeDate: "2026-01-02",
+        createdAt: "2026-01-02T00:00:00Z",
+      },
+    ])
+    expect(state.shares).toBe(500)
+    expect(state.costAmount).toBe(500) // half of 1000
+  })
+
+  it("rejects oversell", () => {
+    expect(() =>
+      rebuildHoldingFromTransactions([
+        {
+          type: "BUY",
+          amount: 100,
+          shares: 10,
+          fee: 0,
+          tradeDate: "2026-01-01",
+        },
+        {
+          type: "SELL",
+          amount: 50,
+          shares: 20,
+          fee: 0,
+          tradeDate: "2026-01-02",
+        },
+      ]),
+    ).toThrow(/卖出份额/)
+  })
+
+  it("applyBuy adds fee into cost", () => {
+    const s = applyBuy(0, 0, 100, buyNetAmount(1000, 10))
+    expect(s.shares).toBe(100)
+    expect(s.costAmount).toBe(1010)
+  })
+
+  it("applySell clears cost when all sold", () => {
+    const s = applySell(100, 500, 100)
+    expect(s.shares).toBe(0)
+    expect(s.costAmount).toBe(0)
+  })
+})
+
+describe("isNavSettled timezone", () => {
+  it("navDate equal todayCST => settled", () => {
+    const now = new Date("2026-07-23T04:00:00.000Z") // CST 12:00
+    // force todayCST for that now
+    const today = todayCST(now)
+    expect(isNavSettled(today, null, now)).toBe(true)
+  })
+
+  it("weekday session with estimate today => not settled (估值中)", () => {
+    // 2026-07-23 is Thursday
+    const now = new Date("2026-07-23T04:00:00.000Z") // 12:00 CST
+    const today = todayCST(now)
+    expect(isNavSettled("2026-07-22", `${today} 11:00`, now)).toBe(false)
+  })
+
+  it("after 15:00 CST => settled even without navDate today", () => {
+    const now = new Date("2026-07-23T08:00:00.000Z") // 16:00 CST
+    expect(isNavSettled("2026-07-22", null, now)).toBe(true)
+  })
+})

@@ -34,6 +34,17 @@ import type {
   TransactionListItem,
 } from "@/lib/transactions-data"
 
+
+function todayInputDate() {
+  // 与服务端 todayCST 对齐：UTC+8 日历日
+  const ms = Date.now() + 8 * 60 * 60 * 1000
+  const d = new Date(ms)
+  const y = d.getUTCFullYear()
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0")
+  const day = String(d.getUTCDate()).padStart(2, "0")
+  return `${y}-${m}-${day}`
+}
+
 type Transaction = TransactionListItem
 type Holding = HoldingOption
 
@@ -74,7 +85,7 @@ const emptyForm = {
   amount: "",
   shares: "",
   nav: "",
-  tradeDate: new Date().toISOString().slice(0, 10),
+  tradeDate: todayInputDate(),
   fee: "0",
   note: "",
 }
@@ -286,7 +297,7 @@ export function TransactionsClient({
         setOpen(false)
         setForm({
           ...emptyForm,
-          tradeDate: new Date().toISOString().slice(0, 10),
+          tradeDate: todayInputDate(),
         })
         await fetchData()
       } else {
