@@ -45,16 +45,18 @@ function extractJsonp(text: string): unknown {
   }
 }
 
-/** 用历史净值接口兜底：拿最近一条单位净值 + 搜索接口补名称 */
+/** 主路径：历史净值 lsjz 最近一条单位净值 + 搜索接口补名称/类型 */
 async function fetchFundNavFallback(
   code: string,
 ): Promise<EastMoneyFundInfo> {
   const normalized = code.trim();
   let name: string | undefined;
+  let type: string | undefined;
   try {
     const hits = await searchFundsFromEastMoney(normalized);
     const exact = hits.find((h) => h.code === normalized) ?? hits[0];
     name = exact?.name;
+    type = exact?.type;
   } catch {
     /* ignore search failure */
   }
@@ -103,6 +105,7 @@ async function fetchFundNavFallback(
   return {
     code: normalized,
     name: name ?? normalized,
+    type,
     nav,
     navDate: row?.FSRQ,
   };
@@ -114,6 +117,13 @@ function toNum(raw: string | undefined): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
+/**
+ * 拉取单只基金信息。
+ *
+ * 主路径：天天基金历史净值 lsjz（单位净值）+ fundsuggest（名称/类型）。
+ * 可选增强：fundgz 实时估值；海外 VPS 上 fundgz 常返回 404 HTML，失败则静默跳过，
+ * 不影响单位净值。
+ */
 export async function fetchFundFromEastMoney(
   code: string,
 ): Promise<EastMoneyFundInfo> {
@@ -122,30 +132,50 @@ export async function fetchFundFromEastMoney(
     throw new Error("基金代码应为 6 位数字");
   }
 
-  const url = `https://fundgz.1234567.com.cn/js/${normalized}.js?rt=${Date.now()}`;
+  // 主路径：lsjz + 搜索（在 xpian/海外机房稳定可用）
+  const base = await fetchFundNavFallback(normalized);
+
+  // 可选：尝试实时估值（成功则补 gsz；失败忽略）
+  try {
+    const est = await fetchFundEstimateOptional(normalized);
+    if (est) {
+      return {
+        ...base,
+        // 若估值接口带回更完整名称则采用
+        name: est.name || base.name,
+        estimateNav: est.estimateNav,
+        estimateChangePct: est.estimateChangePct,
+        estimateTime: est.estimateTime,
+        // 若估值接口也有当日 dwjz 且有效，可覆盖（一般与 lsjz 一致）
+        nav: est.nav && est.nav > 0 ? est.nav : base.nav,
+        navDate: est.navDate || base.navDate,
+      };
+    }
+  } catch {
+    /* fundgz 在海外常不可用，忽略 */
+  }
+
+  return base;
+}
+
+/** 可选的实时估值（fundgz）。失败返回 null，不抛错。 */
+async function fetchFundEstimateOptional(
+  code: string,
+): Promise<EastMoneyFundInfo | null> {
+  const url = `https://fundgz.1234567.com.cn/js/${code}.js?rt=${Date.now()}`;
   const res = await fetch(url, {
     headers: {
       Referer: "https://fund.eastmoney.com/",
       "User-Agent": "Mozilla/5.0",
     },
     cache: "no-store",
-    signal: AbortSignal.timeout(8000),
+    signal: AbortSignal.timeout(5000),
   });
-
-  if (!res.ok) {
-    throw new Error("拉取基金净值失败");
-  }
-
+  if (!res.ok) return null;
   const text = await res.text();
-  if (!text || text.includes("jsonpgz();") || text.includes("jsonpgz()")) {
-    // 估值接口空响应：走历史净值兜底
-    return fetchFundNavFallback(normalized);
-  }
-
+  if (!text || looksLikeHtml(text)) return null;
+  if (text.includes("jsonpgz();") || text.includes("jsonpgz()")) return null;
   try {
-    if (looksLikeHtml(text)) {
-      return fetchFundNavFallback(normalized);
-    }
     const data = extractJsonp(text) as {
       fundcode?: string;
       name?: string;
@@ -155,35 +185,17 @@ export async function fetchFundFromEastMoney(
       jzrq?: string;
       gztime?: string;
     };
-
-    // 单位净值与估值分开：不再用 gsz 覆盖 nav
-    const nav = toNum(data.dwjz);
-    const estimateNav = toNum(data.gsz);
-    const estimateChangePct = toNum(data.gszzl);
-
-    // 主接口无有效净值时也兜底
-    if (nav == null || nav <= 0) {
-      const fb = await fetchFundNavFallback(normalized);
-      return {
-        ...fb,
-        name: data.name || fb.name,
-        estimateNav: estimateNav ?? fb.estimateNav,
-        estimateChangePct: estimateChangePct ?? fb.estimateChangePct,
-        estimateTime: data.gztime ?? fb.estimateTime,
-      };
-    }
-
     return {
-      code: data.fundcode ?? normalized,
-      name: data.name ?? normalized,
-      nav,
+      code: data.fundcode ?? code,
+      name: data.name ?? code,
+      nav: toNum(data.dwjz),
       navDate: data.jzrq,
-      estimateNav,
-      estimateChangePct,
+      estimateNav: toNum(data.gsz),
+      estimateChangePct: toNum(data.gszzl),
       estimateTime: data.gztime,
     };
   } catch {
-    return fetchFundNavFallback(normalized);
+    return null;
   }
 }
 
