@@ -49,3 +49,5 @@ next-env.d.ts
 
 # internal truth (private by default for public remotes)
 /dev-docs/
+data/avatars/
+prod.db

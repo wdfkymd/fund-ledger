@@ -47,8 +47,8 @@ export function Amount({ value, mode = "money", className }: AmountProps) {
     <span
       className={cn(
         "font-mono tabular-nums tracking-tight",
-        colored && value > 0 && "text-emerald-600 dark:text-emerald-400",
-        colored && value < 0 && "text-red-600 dark:text-red-400",
+        colored && value > 0 && "text-red-600 dark:text-red-400",
+        colored && value < 0 && "text-emerald-600 dark:text-emerald-400",
         className,
       )}
     >
