@@ -87,44 +87,95 @@ function fmtIndexPrice(v: number | null) {
 
 
 /** 单条指数胶囊：每 5s 上滑切换到下一个指数 */
+/** 展示用短名：去掉「指数」等后缀，更干净 */
+function indexShortName(name: string) {
+  return name.replace(/指数$/, "").trim() || name
+}
+
+/** 单条指数条：5s 上滑轮播；点击/轻扫可切手动 */
 function IndexTicker({ indices }: { indices: MarketIndex[] }) {
   const [i, setI] = useState(0)
   const len = indices.length
+  const pauseRef = useRef(false)
+  const touchY = useRef<number | null>(null)
+
+  const go = (dir: 1 | -1) => {
+    if (len <= 1) return
+    setI((prev) => (prev + dir + len) % len)
+  }
 
   useEffect(() => {
     if (len <= 1) return
     const id = window.setInterval(() => {
+      if (pauseRef.current) return
       setI((prev) => (prev + 1) % len)
     }, 5000)
     return () => window.clearInterval(id)
   }, [len])
 
-  // 指数列表刷新时避免越界
   useEffect(() => {
     setI((prev) => (len === 0 ? 0 : prev % len))
   }, [len])
 
   if (len === 0) return null
   const idx = indices[i] ?? indices[0]
+  const chgPts =
+    idx.change != null && Number.isFinite(idx.change) ? idx.change : null
 
   return (
-    <div className="w-full">
+    <div
+      className="w-full select-none"
+      onMouseEnter={() => {
+        pauseRef.current = true
+      }}
+      onMouseLeave={() => {
+        pauseRef.current = false
+      }}
+      onClick={() => go(1)}
+      onTouchStart={(e) => {
+        touchY.current = e.touches[0]?.clientY ?? null
+        pauseRef.current = true
+      }}
+      onTouchEnd={(e) => {
+        const start = touchY.current
+        touchY.current = null
+        pauseRef.current = false
+        if (start == null) return
+        const end = e.changedTouches[0]?.clientY
+        if (end == null) return
+        const dy = end - start
+        if (Math.abs(dy) < 24) return
+        // 上滑 → 下一条；下滑 → 上一条
+        go(dy < 0 ? 1 : -1)
+      }}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "ArrowUp" || e.key === "Enter" || e.key === " ") {
+          e.preventDefault()
+          go(1)
+        } else if (e.key === "ArrowDown") {
+          e.preventDefault()
+          go(-1)
+        }
+      }}
+      title={len > 1 ? "点击切换下一指数" : undefined}
+    >
       <div className="relative h-10 w-full overflow-hidden">
         <AnimatePresence mode="popLayout" initial={false}>
           <motion.div
             key={idx.code}
             className="absolute inset-0 flex items-center"
-            initial={{ y: 28, opacity: 0 }}
+            initial={{ y: 22, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            exit={{ y: -28, opacity: 0 }}
-            transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+            exit={{ y: -22, opacity: 0 }}
+            transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
           >
-            {/* 单行：名称 · 点位 · 涨跌幅 · 序号 */}
-            <div className="flex h-full w-full items-center gap-3 rounded-full border bg-muted/30 px-4">
-              <span className="shrink-0 text-xs text-muted-foreground">
-                {idx.name}
+            <div className="flex h-full w-full items-center gap-2 rounded-full border bg-muted/40 px-3.5 sm:gap-3 sm:px-4">
+              <span className="w-12 shrink-0 text-xs font-medium text-foreground/80 sm:w-14">
+                {indexShortName(idx.name)}
               </span>
-              <span className="min-w-0 flex-1 text-center text-sm font-medium tabular-nums tracking-tight">
+              <span className="min-w-0 flex-1 text-center text-[13px] font-semibold tabular-nums tracking-tight sm:text-sm">
                 {fmtIndexPrice(idx.price)}
               </span>
               <span
@@ -134,10 +185,31 @@ function IndexTicker({ indices }: { indices: MarketIndex[] }) {
                 )}
               >
                 {fmtChg(idx.changePct)}
+                {chgPts != null && (
+                  <span className="ml-1 font-normal opacity-80">
+                    {chgPts > 0 ? "+" : ""}
+                    {Math.abs(chgPts) >= 100
+                      ? chgPts.toFixed(0)
+                      : chgPts.toFixed(2)}
+                  </span>
+                )}
               </span>
               {len > 1 && (
-                <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground/60">
-                  {i + 1}/{len}
+                <span
+                  className="flex shrink-0 gap-0.5"
+                  aria-hidden
+                >
+                  {indices.map((_, dot) => (
+                    <span
+                      key={dot}
+                      className={cn(
+                        "size-1 rounded-full transition-colors",
+                        dot === i
+                          ? "bg-foreground/70"
+                          : "bg-muted-foreground/30",
+                      )}
+                    />
+                  ))}
                 </span>
               )}
             </div>
