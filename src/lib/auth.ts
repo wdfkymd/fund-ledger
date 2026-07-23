@@ -57,12 +57,20 @@ export async function verifySessionToken(token: string) {
   }
 }
 
+function cookieSecure(): boolean {
+  // COOKIE_SECURE=0|1 强制；AUTH_TRUST_HTTP=1 时生产也可走 HTTP（exe.dev 自定义端口）
+  if (process.env.COOKIE_SECURE === "1") return true;
+  if (process.env.COOKIE_SECURE === "0") return false;
+  if (process.env.AUTH_TRUST_HTTP === "1") return false;
+  return process.env.NODE_ENV === "production";
+}
+
 export async function setSessionCookie(token: string) {
   const jar = await cookies();
   jar.set(COOKIE_NAME, token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: cookieSecure(),
     path: "/",
     maxAge: SESSION_DAYS * 24 * 60 * 60,
   });

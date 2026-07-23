@@ -168,7 +168,6 @@ export async function getDashboardPayload(
       h.fund.nav,
     )
     const estimateProfit = calcProfit(estimateValue, h.costAmount)
-    const estimateProfitRate = calcProfitRate(estimateProfit, h.costAmount)
     const dayProfit = calcDayProfit(
       h.shares,
       h.fund.estimateNav,
@@ -178,7 +177,6 @@ export async function getDashboardPayload(
     )
     const dayProfitRate = calcDayProfitRate(dayProfit, h.shares, h.fund.nav)
     const profit = calcProfit(marketValue, h.costAmount)
-    const profitRate = calcProfitRate(profit, h.costAmount)
     return {
       id: h.id,
       shares: h.shares,

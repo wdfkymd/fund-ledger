@@ -5,7 +5,7 @@ import { motion } from "motion/react"
 import dynamic from "next/dynamic"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
-import { container as containerV, fadeSlideUp } from "@/lib/motion-variants"
+import { container as fadeSlideUp } from "@/lib/motion-variants"
 import type { AnalyticsPayload } from "@/lib/analytics-data"
 
 const MonthlyFlowChart = dynamic(

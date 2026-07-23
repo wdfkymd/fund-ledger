@@ -10,6 +10,10 @@ import { rateLimit, clientKey } from "@/lib/rate-limit";
 
 export async function POST(req: Request) {
   try {
+    // 个人部署默认关注册；需要时 .env 设 ALLOW_REGISTER=1
+    if (process.env.ALLOW_REGISTER !== "1") {
+      return fail("注册已关闭", 403, undefined, "REGISTER_DISABLED");
+    }
     const rl = rateLimit(clientKey(req, "register"), 5, 60000);
     if (!rl.ok) {
       return fail("注册过于频繁，请稍后再试", 429, { retryAfterSec: rl.retryAfterSec });
