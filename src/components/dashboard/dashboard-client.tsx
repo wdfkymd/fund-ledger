@@ -109,7 +109,7 @@ function IndexTicker({ indices }: { indices: MarketIndex[] }) {
     const id = window.setInterval(() => {
       if (pauseRef.current) return
       setI((prev) => (prev + 1) % len)
-    }, 5000)
+    }, 8000)
     return () => window.clearInterval(id)
   }, [len])
 
