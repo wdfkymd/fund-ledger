@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useCallback, useEffect, useRef } from "react"
+import { useState, useCallback, useEffect } from "react"
 import Link from "next/link"
-import { AnimatePresence, motion } from "motion/react"
+import { motion } from "motion/react"
 import { toast } from "sonner"
 import { AnimatedNumber } from "@/components/animated-number"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -87,139 +87,6 @@ function fmtIndexPrice(v: number | null) {
 
 
 /** 单条指数胶囊：每 5s 上滑切换到下一个指数 */
-/** 展示用短名：去掉「指数」等后缀，更干净 */
-function indexShortName(name: string) {
-  return name.replace(/指数$/, "").trim() || name
-}
-
-/** 单条指数条：5s 上滑轮播；点击/轻扫可切手动 */
-function IndexTicker({ indices }: { indices: MarketIndex[] }) {
-  const [i, setI] = useState(0)
-  const len = indices.length
-  const pauseRef = useRef(false)
-  const touchY = useRef<number | null>(null)
-
-  const go = (dir: 1 | -1) => {
-    if (len <= 1) return
-    setI((prev) => (prev + dir + len) % len)
-  }
-
-  useEffect(() => {
-    if (len <= 1) return
-    const id = window.setInterval(() => {
-      if (pauseRef.current) return
-      setI((prev) => (prev + 1) % len)
-    }, 8000)
-    return () => window.clearInterval(id)
-  }, [len])
-
-  useEffect(() => {
-    setI((prev) => (len === 0 ? 0 : prev % len))
-  }, [len])
-
-  if (len === 0) return null
-  const idx = indices[i] ?? indices[0]
-  const chgPts =
-    idx.change != null && Number.isFinite(idx.change) ? idx.change : null
-
-  return (
-    <div
-      className="w-full select-none"
-      onMouseEnter={() => {
-        pauseRef.current = true
-      }}
-      onMouseLeave={() => {
-        pauseRef.current = false
-      }}
-      onClick={() => go(1)}
-      onTouchStart={(e) => {
-        touchY.current = e.touches[0]?.clientY ?? null
-        pauseRef.current = true
-      }}
-      onTouchEnd={(e) => {
-        const start = touchY.current
-        touchY.current = null
-        pauseRef.current = false
-        if (start == null) return
-        const end = e.changedTouches[0]?.clientY
-        if (end == null) return
-        const dy = end - start
-        if (Math.abs(dy) < 24) return
-        // 上滑 → 下一条；下滑 → 上一条
-        go(dy < 0 ? 1 : -1)
-      }}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === "ArrowUp" || e.key === "Enter" || e.key === " ") {
-          e.preventDefault()
-          go(1)
-        } else if (e.key === "ArrowDown") {
-          e.preventDefault()
-          go(-1)
-        }
-      }}
-      title={len > 1 ? "点击切换下一指数" : undefined}
-    >
-      <div className="relative h-10 w-full overflow-hidden">
-        <AnimatePresence mode="popLayout" initial={false}>
-          <motion.div
-            key={idx.code}
-            className="absolute inset-0 flex items-center"
-            initial={{ y: 22, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: -22, opacity: 0 }}
-            transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
-          >
-            <div className="flex h-full w-full items-center gap-2 rounded-full border bg-muted/40 px-3.5 sm:gap-3 sm:px-4">
-              <span className="w-12 shrink-0 text-xs font-medium text-foreground/80 sm:w-14">
-                {indexShortName(idx.name)}
-              </span>
-              <span className="min-w-0 flex-1 text-center text-[13px] font-semibold tabular-nums tracking-tight sm:text-sm">
-                {fmtIndexPrice(idx.price)}
-              </span>
-              <span
-                className={cn(
-                  "shrink-0 text-xs font-medium tabular-nums",
-                  tone(idx.changePct),
-                )}
-              >
-                {fmtChg(idx.changePct)}
-                {chgPts != null && (
-                  <span className="ml-1 font-normal opacity-80">
-                    {chgPts > 0 ? "+" : ""}
-                    {Math.abs(chgPts) >= 100
-                      ? chgPts.toFixed(0)
-                      : chgPts.toFixed(2)}
-                  </span>
-                )}
-              </span>
-              {len > 1 && (
-                <span
-                  className="flex shrink-0 flex-col items-center justify-center gap-0.5"
-                  aria-hidden
-                >
-                  {indices.map((_, dot) => (
-                    <span
-                      key={dot}
-                      className={cn(
-                        "size-1 rounded-full transition-colors",
-                        dot === i
-                          ? "bg-foreground/70"
-                          : "bg-muted-foreground/30",
-                      )}
-                    />
-                  ))}
-                </span>
-              )}
-            </div>
-          </motion.div>
-        </AnimatePresence>
-      </div>
-    </div>
-  )
-}
-
 export function DashboardClient({ initial }: { initial: DashboardPayload }) {
   const [holdings, setHoldings] = useState<Holding[]>(initial.holdings)
   const [watchlist, setWatchlist] = useState<WatchItem[]>(initial.watchlist)
@@ -311,14 +178,53 @@ export function DashboardClient({ initial }: { initial: DashboardPayload }) {
   return (
     <div className="mx-auto w-full max-w-xl px-5 py-8 sm:px-6 sm:py-10">
       {/* 固定高度，避免加载/空数据时挤压下方布局 */}
-      <div className="mb-6 min-h-10">
+      <div className="mb-6 -mx-1 min-h-9">
         {indices.length > 0 ? (
-          <IndexTicker indices={indices} />
+          <motion.div
+            className="flex gap-2 overflow-x-auto px-1 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            style={{ WebkitOverflowScrolling: "touch" }}
+            {...containerV}
+          >
+            {indices.map((idx, i) => (
+              <motion.div
+                key={idx.code}
+                className="flex shrink-0 items-center gap-2 rounded-full border bg-muted/30 px-3 py-1.5"
+                {...staggerItem(i)}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+                  {idx.name}
+                </span>
+                <span className="text-[11px] font-medium tabular-nums tracking-tight whitespace-nowrap">
+                  {fmtIndexPrice(idx.price)}
+                </span>
+                <span
+                  className={cn(
+                    "text-[11px] tabular-nums whitespace-nowrap",
+                    tone(idx.changePct),
+                  )}
+                >
+                  {fmtChg(idx.changePct)}
+                </span>
+              </motion.div>
+            ))}
+          </motion.div>
         ) : indicesLoading ? (
-          <div className="flex h-10 w-full items-center gap-3 rounded-full border bg-muted/30 px-4">
-            <Skeleton className="h-3 w-10 rounded-full" />
-            <Skeleton className="mx-auto h-3.5 w-16 rounded-full" />
-            <Skeleton className="h-3 w-12 rounded-full" />
+          <div
+            className="flex gap-2 overflow-x-auto px-1 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            style={{ WebkitOverflowScrolling: "touch" }}
+          >
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div
+                key={i}
+                className="flex shrink-0 items-center gap-2 rounded-full border bg-muted/30 px-3 py-1.5"
+              >
+                <Skeleton className="h-3 w-8 rounded-full" />
+                <Skeleton className="h-3 w-12 rounded-full" />
+                <Skeleton className="h-3 w-10 rounded-full" />
+              </div>
+            ))}
           </div>
         ) : null}
       </div>
