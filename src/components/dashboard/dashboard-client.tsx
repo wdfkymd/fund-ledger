@@ -196,7 +196,7 @@ function IndexTicker({ indices }: { indices: MarketIndex[] }) {
               </span>
               {len > 1 && (
                 <span
-                  className="flex shrink-0 gap-0.5"
+                  className="flex shrink-0 flex-col items-center justify-center gap-0.5"
                   aria-hidden
                 >
                   {indices.map((_, dot) => (
