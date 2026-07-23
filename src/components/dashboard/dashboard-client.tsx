@@ -107,61 +107,39 @@ function IndexTicker({ indices }: { indices: MarketIndex[] }) {
   if (len === 0) return null
   const idx = indices[i] ?? indices[0]
 
-  // 涨跌点数（有则显示）
-  const chgPts =
-    idx.change != null && Number.isFinite(idx.change) ? idx.change : null
-
   return (
-    <div className="w-full px-0">
-      {/* 加高、全宽，内容更疏可扫读 */}
-      <div className="relative h-14 w-full overflow-hidden sm:h-16">
+    <div className="w-full">
+      <div className="relative h-10 w-full overflow-hidden">
         <AnimatePresence mode="popLayout" initial={false}>
           <motion.div
             key={idx.code}
             className="absolute inset-0 flex items-center"
-            initial={{ y: 40, opacity: 0 }}
+            initial={{ y: 28, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            exit={{ y: -40, opacity: 0 }}
-            transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+            exit={{ y: -28, opacity: 0 }}
+            transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
           >
-            <div className="flex h-full w-full items-center justify-between gap-3 rounded-2xl border bg-muted/35 px-4 py-2.5 sm:px-5 sm:py-3">
-              <div className="min-w-0 flex flex-1 flex-col gap-0.5">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium tracking-tight text-foreground sm:text-[15px]">
-                    {idx.name}
-                  </span>
-                  {len > 1 && (
-                    <span className="rounded-md bg-background/80 px-1.5 py-0.5 text-[10px] tabular-nums text-muted-foreground">
-                      {i + 1}/{len}
-                    </span>
-                  )}
-                </div>
-                <span className="text-[11px] tabular-nums text-muted-foreground">
-                  {idx.code}
-                  <span className="mx-1.5 opacity-40">·</span>
-                  大盘指数
+            {/* 单行：名称 · 点位 · 涨跌幅 · 序号 */}
+            <div className="flex h-full w-full items-center gap-3 rounded-full border bg-muted/30 px-4">
+              <span className="shrink-0 text-xs text-muted-foreground">
+                {idx.name}
+              </span>
+              <span className="min-w-0 flex-1 text-center text-sm font-medium tabular-nums tracking-tight">
+                {fmtIndexPrice(idx.price)}
+              </span>
+              <span
+                className={cn(
+                  "shrink-0 text-xs font-medium tabular-nums",
+                  tone(idx.changePct),
+                )}
+              >
+                {fmtChg(idx.changePct)}
+              </span>
+              {len > 1 && (
+                <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground/60">
+                  {i + 1}/{len}
                 </span>
-              </div>
-
-              <div className="shrink-0 text-right">
-                <p className="text-base font-semibold tabular-nums tracking-tight sm:text-lg">
-                  {fmtIndexPrice(idx.price)}
-                </p>
-                <p
-                  className={cn(
-                    "mt-0.5 text-xs font-medium tabular-nums sm:text-[13px]",
-                    tone(idx.changePct),
-                  )}
-                >
-                  {fmtChg(idx.changePct)}
-                  {chgPts != null && (
-                    <span className="ml-1.5 font-normal opacity-90">
-                      {chgPts > 0 ? "+" : ""}
-                      {chgPts.toFixed(2)}
-                    </span>
-                  )}
-                </p>
-              </div>
+              )}
             </div>
           </motion.div>
         </AnimatePresence>
@@ -261,21 +239,14 @@ export function DashboardClient({ initial }: { initial: DashboardPayload }) {
   return (
     <div className="mx-auto w-full max-w-xl px-5 py-8 sm:px-6 sm:py-10">
       {/* 固定高度，避免加载/空数据时挤压下方布局 */}
-      <div className="mb-6 min-h-14 sm:min-h-16">
+      <div className="mb-6 min-h-10">
         {indices.length > 0 ? (
           <IndexTicker indices={indices} />
         ) : indicesLoading ? (
-          <div className="w-full">
-            <div className="flex h-14 w-full items-center justify-between gap-3 rounded-2xl border bg-muted/35 px-4 py-2.5 sm:h-16 sm:px-5">
-              <div className="flex flex-col gap-1.5">
-                <Skeleton className="h-4 w-16 rounded-md" />
-                <Skeleton className="h-3 w-24 rounded-md" />
-              </div>
-              <div className="flex flex-col items-end gap-1.5">
-                <Skeleton className="h-5 w-20 rounded-md" />
-                <Skeleton className="h-3 w-16 rounded-md" />
-              </div>
-            </div>
+          <div className="flex h-10 w-full items-center gap-3 rounded-full border bg-muted/30 px-4">
+            <Skeleton className="h-3 w-10 rounded-full" />
+            <Skeleton className="mx-auto h-3.5 w-16 rounded-full" />
+            <Skeleton className="h-3 w-12 rounded-full" />
           </div>
         ) : null}
       </div>
