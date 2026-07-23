@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useCallback, useEffect } from "react"
+import { useState, useCallback, useEffect, useRef } from "react"
 import Link from "next/link"
-import { motion } from "motion/react"
+import { AnimatePresence, motion } from "motion/react"
 import { toast } from "sonner"
 import { AnimatedNumber } from "@/components/animated-number"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -83,6 +83,68 @@ function fmtIndexPrice(v: number | null) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })
+}
+
+
+/** 单条指数胶囊：每 5s 上滑切换到下一个指数 */
+function IndexTicker({ indices }: { indices: MarketIndex[] }) {
+  const [i, setI] = useState(0)
+  const len = indices.length
+
+  useEffect(() => {
+    if (len <= 1) return
+    const id = window.setInterval(() => {
+      setI((prev) => (prev + 1) % len)
+    }, 5000)
+    return () => window.clearInterval(id)
+  }, [len])
+
+  // 指数列表刷新时避免越界
+  useEffect(() => {
+    setI((prev) => (len === 0 ? 0 : prev % len))
+  }, [len])
+
+  if (len === 0) return null
+  const idx = indices[i] ?? indices[0]
+
+  return (
+    <div className="px-1">
+      <div className="relative mx-auto h-9 w-full max-w-sm overflow-hidden">
+        <AnimatePresence mode="popLayout" initial={false}>
+          <motion.div
+            key={idx.code}
+            className="absolute inset-0 flex items-center justify-center"
+            initial={{ y: 28, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: -28, opacity: 0 }}
+            transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <div className="flex w-full items-center justify-center gap-2.5 rounded-full border bg-muted/30 px-4 py-1.5">
+              <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+                {idx.name}
+              </span>
+              <span className="text-[11px] font-medium tabular-nums tracking-tight whitespace-nowrap">
+                {fmtIndexPrice(idx.price)}
+              </span>
+              <span
+                className={cn(
+                  "text-[11px] tabular-nums whitespace-nowrap",
+                  tone(idx.changePct),
+                )}
+              >
+                {fmtChg(idx.changePct)}
+              </span>
+              {len > 1 && (
+                <span className="text-[10px] tabular-nums text-muted-foreground/70">
+                  {i + 1}/{len}
+                </span>
+              )}
+            </div>
+          </motion.div>
+        </AnimatePresence>
+      </div>
+    </div>
+  )
 }
 
 export function DashboardClient({ initial }: { initial: DashboardPayload }) {
@@ -178,51 +240,14 @@ export function DashboardClient({ initial }: { initial: DashboardPayload }) {
       {/* 固定高度，避免加载/空数据时挤压下方布局 */}
       <div className="mb-6 -mx-1 min-h-9">
         {indices.length > 0 ? (
-          <motion.div
-            className="flex gap-2 overflow-x-auto px-1 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-            style={{ WebkitOverflowScrolling: "touch" }}
-            {...containerV}
-          >
-            {indices.map((idx, i) => (
-              <motion.div
-                key={idx.code}
-                className="flex shrink-0 items-center gap-2 rounded-full border bg-muted/30 px-3 py-1.5 cursor-pointer"
-                {...staggerItem(i)}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <span className="text-[11px] text-muted-foreground whitespace-nowrap">
-                  {idx.name}
-                </span>
-                <span className="text-[11px] font-medium tabular-nums tracking-tight whitespace-nowrap">
-                  {fmtIndexPrice(idx.price)}
-                </span>
-                <span
-                  className={cn(
-                    "text-[11px] tabular-nums whitespace-nowrap",
-                    tone(idx.changePct),
-                  )}
-                >
-                  {fmtChg(idx.changePct)}
-                </span>
-              </motion.div>
-            ))}
-          </motion.div>
+          <IndexTicker indices={indices} />
         ) : indicesLoading ? (
-          <div
-            className="flex gap-2 overflow-x-auto px-1 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-            style={{ WebkitOverflowScrolling: "touch" }}
-          >
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div
-                key={i}
-                className="flex shrink-0 items-center gap-2 rounded-full border bg-muted/30 px-3 py-1.5"
-              >
-                <Skeleton className="h-3 w-8 rounded-full" />
-                <Skeleton className="h-3 w-12 rounded-full" />
-                <Skeleton className="h-3 w-10 rounded-full" />
-              </div>
-            ))}
+          <div className="px-1">
+            <div className="mx-auto flex h-9 w-full max-w-sm items-center justify-center gap-2 rounded-full border bg-muted/30 px-4 py-1.5">
+              <Skeleton className="h-3 w-10 rounded-full" />
+              <Skeleton className="h-3 w-14 rounded-full" />
+              <Skeleton className="h-3 w-12 rounded-full" />
+            </div>
           </div>
         ) : null}
       </div>
