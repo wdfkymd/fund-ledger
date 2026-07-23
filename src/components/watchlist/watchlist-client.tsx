@@ -21,6 +21,20 @@ import {
 import { motion } from "motion/react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import {
+  toneCn as tone,
+  signedMoney,
+  fmtPct,
+  fmtChg,
+  fmtNav,
+  settledLabel,
+  settledTag,
+  tagPillClass,
+  changeSourceLabel,
+  fmtMoney,
+} from "@/lib/format-cn"
+
+const fmt = fmtMoney
 import { container as containerV, staggerItem } from "@/lib/motion-variants"
 import { useRouter } from "next/navigation"
 import type { WatchlistItem } from "@/lib/watchlist-data"
@@ -29,23 +43,8 @@ type WatchItem = WatchlistItem
 
 const emptyAdd = { fundCode: "", fundName: "", note: "" }
 
-function fmtNav(v: number | null | undefined) {
-  if (v == null) return "—"
-  return v.toFixed(4)
-}
 
-function tone(v: number | null | undefined) {
-  if (v == null || v === 0) return "text-muted-foreground"
-  return v > 0
-    ? "text-emerald-600 dark:text-emerald-400"
-    : "text-red-600 dark:text-red-400"
-}
 
-function fmtChg(pct: number | null | undefined) {
-  if (pct == null) return "—"
-  const sign = pct > 0 ? "+" : ""
-  return `${sign}${pct.toFixed(2)}%`
-}
 
 const emptyHold = { shares: "", costPrice: "" }
 
@@ -305,7 +304,8 @@ export function WatchlistClient({ initial }: { initial: WatchItem[] }) {
       ) : (
         <motion.div className="divide-y overflow-hidden rounded-xl border" {...containerV}>
           {items.map((item, i) => {
-            const chg = item.fund.estimateChangePct ?? item.fund.navChangePct
+            const chgSrc = changeSourceLabel(item.fund.estimateChangePct, item.fund.navChangePct)
+            const chg = chgSrc.pct
             const est = item.fund.estimateNav
             const nav = item.fund.nav
             return (
@@ -341,6 +341,11 @@ export function WatchlistClient({ initial }: { initial: WatchItem[] }) {
                         {fmtNav(est ?? nav)}
                       </p>
                       <p className={cn("mt-1 text-xs tabular-nums", tone(chg))}>
+                        {chg != null && (
+                          <span className={cn(tagPillClass(chgSrc.isEstimate), "mr-1 align-middle")}>
+                            {chgSrc.label}
+                          </span>
+                        )}
                         {fmtChg(chg)}
                       </p>
                     </div>

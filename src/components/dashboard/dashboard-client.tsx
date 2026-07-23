@@ -10,6 +10,20 @@ import { container as containerV, staggerItem } from "@/lib/motion-variants"
 import { Button } from "@/components/ui/button"
 import { RefreshCwIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
+import {
+  toneCn as tone,
+  signedMoney,
+  fmtPct,
+  fmtChg,
+  fmtNav,
+  settledLabel,
+  settledTag,
+  tagPillClass,
+  changeSourceLabel,
+  fmtMoney,
+} from "@/lib/format-cn"
+
+const fmt = fmtMoney
 import type { DashboardPayload } from "@/lib/dashboard-data"
 
 type Holding = DashboardPayload["holdings"][number]
@@ -33,42 +47,11 @@ const TX_LABEL: Record<string, string> = {
   SIP: "定投",
 }
 
-function fmt(v: number) {
-  return v.toLocaleString("zh-CN", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
-}
 
-function fmtPct(rate: number | null | undefined) {
-  if (rate == null) return "—"
-  const sign = rate > 0 ? "+" : ""
-  return `${sign}${(rate * 100).toFixed(2)}%`
-}
 
-function fmtNav(v: number | null | undefined) {
-  if (v == null) return "—"
-  return v.toFixed(4)
-}
 
-function fmtChg(pct: number | null | undefined) {
-  if (pct == null) return "—"
-  const sign = pct > 0 ? "+" : ""
-  return `${sign}${pct.toFixed(2)}%`
-}
 
-function tone(v: number | null | undefined) {
-  if (v == null || v === 0) return "text-muted-foreground"
-  return v > 0
-    ? "text-emerald-600 dark:text-emerald-400"
-    : "text-red-600 dark:text-red-400"
-}
 
-function signedMoney(amount: number | null) {
-  if (amount == null) return "—"
-  const sign = amount > 0 ? "+" : ""
-  return `${sign}${fmt(amount)}`
-}
 
 function MetricCell({
   label,
@@ -268,21 +251,29 @@ export function DashboardClient({ initial }: { initial: DashboardPayload }) {
         <div className="mt-4 space-y-1">
           <p className={cn("text-sm font-medium tabular-nums", tone(day))}>
             {day == null ? (
-              "今日 —"
+              <>
+                {settledLabel(!settled)} —
+              </>
             ) : (
               <>
-                今日 <AnimatedNumber value={day} formatFn={signedMoney} />
+                <span className={cn(tagPillClass(!settled), "mr-1.5 align-middle")}>
+                  {settledTag(!settled)}
+                </span>
+                今日{" "}
+                <AnimatedNumber value={day} formatFn={signedMoney} />
                 {dayRate != null && (
                   <span className="ml-1.5 font-normal">{fmtPct(dayRate)}</span>
                 )}
               </>
             )}
           </p>
-          {estimateTime && (
-            <p className="text-xs text-muted-foreground/80">
-              估值 {estimateTime}
-            </p>
-          )}
+          <p className="text-xs text-muted-foreground/80">
+            {settled
+              ? "实·已确认净值"
+              : estimateTime
+                ? `估·盘中 ${estimateTime}`
+                : "估·按日涨跌估算（无盘中估值）"}
+          </p>
         </div>
 
         <motion.div
@@ -296,12 +287,12 @@ export function DashboardClient({ initial }: { initial: DashboardPayload }) {
             value={<AnimatedNumber value={cost} formatFn={fmt} />}
           />
           <MetricCell
-            label={settled ? "累计盈亏" : "预估盈亏"}
+            label={settled ? "盈亏·实" : "盈亏·估"}
             value={<AnimatedNumber value={profit} formatFn={signedMoney} />}
             valueClassName={tone(profit)}
           />
           <MetricCell
-            label={settled ? "收益率" : "预估率"}
+            label={settled ? "收益率·实" : "收益率·估"}
             value={<AnimatedNumber value={profitRate} formatFn={fmtPct} />}
             valueClassName={tone(profitRate)}
           />
@@ -404,6 +395,9 @@ export function DashboardClient({ initial }: { initial: DashboardPayload }) {
                       </div>
                       <div className="shrink-0 text-right">
                         <p className="text-sm font-medium tabular-nums tracking-tight">
+                          <span className={cn(tagPillClass(!hSettled), "mr-1 align-middle")}>
+                            {settledTag(!hSettled)}
+                          </span>
                           {hSettled ? fmt(h.marketValue) : fmt(h.estimateValue)}
                         </p>
                         <p
@@ -414,13 +408,21 @@ export function DashboardClient({ initial }: { initial: DashboardPayload }) {
                         >
                           {dp != null ? (
                             <>
+                              <span className="text-muted-foreground mr-1">
+                                {h.fund.estimateNav != null ? "估" : "实"}
+                              </span>
                               {signedMoney(dp)}
                               {dpr != null && (
                                 <span className="ml-1.5">{fmtPct(dpr)}</span>
                               )}
                             </>
                           ) : chg != null ? (
-                            fmtChg(chg)
+                            <>
+                              <span className="text-muted-foreground mr-1">
+                                {h.fund.estimateChangePct != null ? "估" : "实"}
+                              </span>
+                              {fmtChg(chg)}
+                            </>
                           ) : (
                             "—"
                           )}
@@ -608,7 +610,7 @@ export function DashboardClient({ initial }: { initial: DashboardPayload }) {
                       className={cn(
                         "shrink-0 text-sm font-medium tabular-nums tracking-tight",
                         isSell
-                          ? "text-emerald-600 dark:text-emerald-400"
+                          ? "text-red-600 dark:text-red-400"
                           : "text-foreground",
                       )}
                     >

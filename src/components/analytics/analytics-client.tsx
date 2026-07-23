@@ -5,6 +5,20 @@ import { motion } from "motion/react"
 import dynamic from "next/dynamic"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
+import {
+  toneCn as tone,
+  signedMoney,
+  fmtPct,
+  fmtChg,
+  fmtNav,
+  settledLabel,
+  settledTag,
+  tagPillClass,
+  changeSourceLabel,
+  fmtMoney,
+} from "@/lib/format-cn"
+
+const fmt = fmtMoney
 import { container as fadeSlideUp } from "@/lib/motion-variants"
 import type { AnalyticsPayload } from "@/lib/analytics-data"
 
@@ -25,31 +39,9 @@ const MonthlyFlowChart = dynamic(
 
 type AnalyticsData = AnalyticsPayload
 
-function fmt(v: number) {
-  return v.toLocaleString("zh-CN", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
-}
 
-function fmtPct(rate: number | null | undefined) {
-  if (rate == null) return "—"
-  const sign = rate > 0 ? "+" : ""
-  return `${sign}${(rate * 100).toFixed(2)}%`
-}
 
-function tone(v: number | null | undefined) {
-  if (v == null || v === 0) return "text-muted-foreground"
-  return v > 0
-    ? "text-emerald-600 dark:text-emerald-400"
-    : "text-red-600 dark:text-red-400"
-}
 
-function signedMoney(amount: number | null) {
-  if (amount == null) return "—"
-  const sign = amount > 0 ? "+" : ""
-  return `${sign}${fmt(amount)}`
-}
 
 function MetricCell({
   label,
@@ -115,8 +107,8 @@ export function AnalyticsClient({ initial }: { initial: AnalyticsData }) {
         </p>
         <p className={cn("mt-1.5 text-xs tabular-nums", tone(summary.totalDayProfit))}>
           {summary.totalDayProfit == null
-            ? "今日 —"
-            : `今日 ${signedMoney(summary.totalDayProfit)}${
+            ? `${settledLabel(summary.isEstimate)} —`
+            : `${settledLabel(summary.isEstimate)} ${signedMoney(summary.totalDayProfit)}${
                 summary.totalDayProfitRate != null
                   ? `  ${fmtPct(summary.totalDayProfitRate)}`
                   : ""
@@ -318,7 +310,7 @@ export function AnalyticsClient({ initial }: { initial: AnalyticsData }) {
                         <p className="mt-1 text-xs leading-4 tabular-nums text-muted-foreground">
                           成本 {fmt(item.costAmount)}
                           <span className="mx-1.5 opacity-40">·</span>
-                          {item.isEstimate ? "估值" : "市值"} {fmt(item.isEstimate ? item.estimateValue : item.marketValue)}
+                          {item.isEstimate ? "市值·估" : "市值·实"} {fmt(item.isEstimate ? item.estimateValue : item.marketValue)}
                         </p>
                       </div>
                       <div className="text-right">

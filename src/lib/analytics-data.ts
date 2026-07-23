@@ -62,6 +62,7 @@ export type AnalyticsPayload = {
     totalEstimateProfitRate: number | null
     totalDayProfit: number | null
     totalDayProfitRate: number | null
+    isEstimate: boolean
     holdingCount: number
     transactionCount: number
   }
@@ -106,6 +107,7 @@ export async function getAnalyticsPayload(
   let totalMarketValue = 0
   let totalEstimateValue = 0
   let totalDayProfit: number | null = null
+  let anyEstimate = false
   let dayProfitBase = 0
 
   const fundItems: AnalyticsFundItem[] = holdings.map((h) => {
@@ -125,6 +127,7 @@ export async function getAnalyticsPayload(
     )
     const dayProfitRate = calcDayProfitRate(dayProfit, h.shares, h.fund.nav)
     const isEstimate = !isNavSettled(h.fund.navDate, h.fund.estimateTime)
+    if (isEstimate) anyEstimate = true
 
     totalCost += h.costAmount
     totalMarketValue += marketValue
@@ -237,6 +240,7 @@ export async function getAnalyticsPayload(
         totalDayProfit != null && dayProfitBase > 0
           ? roundMoney(totalDayProfit / dayProfitBase, 6)
           : null,
+      isEstimate: anyEstimate,
       holdingCount: holdings.length,
       transactionCount: transactions.length,
     },

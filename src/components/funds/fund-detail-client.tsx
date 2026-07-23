@@ -7,6 +7,20 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { RefreshCwIcon, ArrowLeftIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
+import {
+  toneCn as tone,
+  signedMoney,
+  fmtPct,
+  fmtChg,
+  fmtNav,
+  settledLabel,
+  settledTag,
+  tagPillClass,
+  changeSourceLabel,
+  fmtMoney,
+} from "@/lib/format-cn"
+
+const fmt = fmtMoney
 import { container as containerV, staggerItem, fadeSlideUp } from "@/lib/motion-variants"
 import type { FundDetailPayload } from "@/lib/fund-detail-data"
 
@@ -33,42 +47,11 @@ const TYPE_LABEL: Record<string, string> = {
   SIP: "定投",
 }
 
-function fmt(v: number) {
-  return v.toLocaleString("zh-CN", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
-}
 
-function fmtNav(v: number | null | undefined) {
-  if (v == null) return "—"
-  return v.toFixed(4)
-}
 
-function fmtPct(rate: number | null | undefined) {
-  if (rate == null) return "—"
-  const sign = rate > 0 ? "+" : ""
-  return `${sign}${(rate * 100).toFixed(2)}%`
-}
 
-function fmtChg(pct: number | null | undefined) {
-  if (pct == null) return "—"
-  const sign = pct > 0 ? "+" : ""
-  return `${sign}${pct.toFixed(2)}%`
-}
 
-function tone(v: number | null | undefined) {
-  if (v == null || v === 0) return "text-muted-foreground"
-  return v > 0
-    ? "text-emerald-600 dark:text-emerald-400"
-    : "text-red-600 dark:text-red-400"
-}
 
-function signedMoney(amount: number | null) {
-  if (amount == null) return "—"
-  const sign = amount > 0 ? "+" : ""
-  return `${sign}${fmt(amount)}`
-}
 
 function MetricCell({
   label,
@@ -194,13 +177,17 @@ export function FundDetailClient({
       {/* Quote hero */}
       <motion.section className="mb-8 text-center" {...fadeSlideUp}>
         <p className="text-xs tracking-wide text-muted-foreground">
-          {fund.estimateNav != null ? "估值" : "单位净值"}
+          {fund.estimateNav != null ? "估·净值" : "实·单位净值"}
         </p>
         <p className="mt-3 text-[2.25rem] font-semibold leading-none tracking-tight tabular-nums sm:text-[2.75rem]">
           {fmtNav(fund.estimateNav ?? fund.nav)}
         </p>
         <p className={cn("mt-4 text-sm font-medium tabular-nums", tone(chg))}>
-          {chg == null ? "涨跌 —" : estChg != null ? `估算 ${fmtChg(estChg)}` : `日涨跌 ${fmtChg(navChg!)}`}
+          {chg == null
+            ? "涨跌 —"
+            : estChg != null
+              ? `估 ${fmtChg(estChg)}`
+              : `实 ${fmtChg(navChg!)}`}
         </p>
         <p className="mt-1.5 text-xs text-muted-foreground">
           单位净值 {fmtNav(fund.nav)}
@@ -221,16 +208,16 @@ export function FundDetailClient({
         {holding && (
           <div className="mt-8 grid grid-cols-3 items-start divide-x rounded-xl border bg-muted/40 py-3.5 sm:py-4">
             <MetricCell
-              label={holding.isEstimate ? "持仓估值" : "持仓市值"}
+              label={holding.isEstimate ? "市值·估" : "市值·实"}
               value={fmt(holding.isEstimate ? holding.estimateValue : holding.marketValue)}
             />
             <MetricCell
-              label={holding.isEstimate ? "预估盈亏" : "累计盈亏"}
+              label={holding.isEstimate ? "盈亏·估" : "盈亏·实"}
               value={signedMoney(holding.isEstimate ? holding.estimateProfit : holding.profit)}
               valueClassName={tone(holding.isEstimate ? holding.estimateProfit : holding.profit)}
             />
             <MetricCell
-              label="今日"
+              label={holding.isEstimate || fund.estimateNav != null ? "今日·估" : "今日·实"}
               value={
                 holding.dayProfit == null
                   ? "—"
@@ -396,7 +383,7 @@ export function FundDetailClient({
                         "shrink-0 text-sm font-medium tabular-nums",
                         isSell
                           ? "text-red-600 dark:text-red-400"
-                          : "text-emerald-600 dark:text-emerald-400",
+                          : "text-red-600 dark:text-red-400",
                       )}
                     >
                       {isSell ? "+" : "-"}

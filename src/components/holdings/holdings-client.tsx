@@ -15,6 +15,20 @@ import {
 } from "@/components/ui/dialog"
 import { PlusIcon, Trash2Icon, PencilIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
+import {
+  toneCn as tone,
+  signedMoney,
+  fmtPct,
+  fmtChg,
+  fmtNav,
+  settledLabel,
+  settledTag,
+  tagPillClass,
+  changeSourceLabel,
+  fmtMoney,
+} from "@/lib/format-cn"
+
+const fmt = fmtMoney
 import { container as containerV, staggerItem } from "@/lib/motion-variants"
 import type { HoldingListItem } from "@/lib/holdings-data"
 
@@ -22,31 +36,9 @@ type Holding = HoldingListItem
 
 const emptyAdd = { fundCode: "", fundName: "", shares: "", costPrice: "" }
 
-function fmt(v: number) {
-  return v.toLocaleString("zh-CN", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
-}
 
-function fmtPct(rate: number | null | undefined) {
-  if (rate == null) return "—"
-  const sign = rate > 0 ? "+" : ""
-  return `${sign}${(rate * 100).toFixed(2)}%`
-}
 
-function tone(v: number | null | undefined) {
-  if (v == null || v === 0) return "text-muted-foreground"
-  return v > 0
-    ? "text-emerald-600 dark:text-emerald-400"
-    : "text-red-600 dark:text-red-400"
-}
 
-function signedMoney(amount: number | null) {
-  if (amount == null) return "—"
-  const sign = amount > 0 ? "+" : ""
-  return `${sign}${fmt(amount)}`
-}
 
 function MiniMetric({
   label,
@@ -343,6 +335,7 @@ function HoldingsClientInner({ initial }: { initial: Holding[] }) {
         <motion.div className="divide-y overflow-hidden rounded-xl border" {...containerV}>
           {holdings.map((h, i) => {
             const settled = !h.isEstimate
+            const dayIsEst = h.fund.estimateNav != null || h.isEstimate
             const value = settled ? h.marketValue : (h.estimateValue || h.marketValue)
             const profit = settled ? h.profit : (h.estimateProfit ?? h.profit)
             const profitRate = settled
@@ -375,7 +368,7 @@ function HoldingsClientInner({ initial }: { initial: Holding[] }) {
                     <p className={cn("mt-1 text-xs tabular-nums", tone(dp))}>
                       {dp != null ? (
                         <>
-                          {signedMoney(dp)}
+                          <span className={cn(tagPillClass(h.isEstimate), "mr-1 align-middle")}>{settledTag(h.isEstimate)}</span>{signedMoney(dp)}
                           {dpr != null && (
                             <span className="ml-1.5">{fmtPct(dpr)}</span>
                           )}
