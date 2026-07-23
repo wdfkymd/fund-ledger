@@ -36,23 +36,29 @@ export function calcEstimateValue(
 }
 
 /**
- * 今日预估盈利（相对上一公布单位净值，不是相对成本）。
- * 优先：份额 × (估值 − 单位净值)；
- * 否则：份额 × 单位净值 × 估算涨跌幅%。
- * 无数据时返回 null（前端显示 —）。
+ * 日盈亏（相对上一公布单位净值，不是相对成本）。
+ * 1) 有盘中估值：份额 × (estimateNav − nav)  → 今日估算
+ * 2) 否则有净值日涨跌：份额 × nav × (navChangePct/100) → 净值日涨跌对应盈亏
+ * 注意：禁止把 navChangePct 写入 estimateChangePct 再算。
  */
 export function calcDayProfit(
   shares: number,
   estimateNav: number | null | undefined,
   nav: number | null | undefined,
   estimateChangePct: number | null | undefined,
+  navChangePct?: number | null | undefined,
 ): number | null {
   if (shares <= 0) return null
   if (estimateNav != null && nav != null && estimateNav > 0 && nav > 0) {
     return roundMoney(shares * (estimateNav - nav), 4)
   }
+  // 仅在有真实盘中估算涨跌时用 estimateChangePct
   if (estimateChangePct != null && nav != null && nav > 0) {
     return roundMoney(shares * nav * (estimateChangePct / 100), 4)
+  }
+  // 净值日涨跌（与估值无关）
+  if (navChangePct != null && nav != null && nav > 0) {
+    return roundMoney(shares * nav * (navChangePct / 100), 4)
   }
   return null
 }

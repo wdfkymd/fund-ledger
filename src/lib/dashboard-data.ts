@@ -28,6 +28,7 @@ export type DashboardHolding = {
     nav: number | null
     estimateNav: number | null
     estimateChangePct: number | null
+    navChangePct: number | null
     estimateTime: string | null
   }
 }
@@ -42,6 +43,7 @@ export type DashboardWatchItem = {
     nav: number | null
     estimateNav: number | null
     estimateChangePct: number | null
+    navChangePct: number | null
     estimateTime: string | null
   }
 }
@@ -107,6 +109,7 @@ export async function getDashboardPayload(
             navDate: true,
             estimateNav: true,
             estimateChangePct: true,
+            navChangePct: true,
             estimateTime: true,
           },
         },
@@ -126,6 +129,7 @@ export async function getDashboardPayload(
             nav: true,
             estimateNav: true,
             estimateChangePct: true,
+            navChangePct: true,
             estimateTime: true,
           },
         },
@@ -170,6 +174,7 @@ export async function getDashboardPayload(
       h.fund.estimateNav,
       h.fund.nav,
       h.fund.estimateChangePct,
+      h.fund.navChangePct,
     )
     const dayProfitRate = calcDayProfitRate(dayProfit, h.shares, h.fund.nav)
     const profit = calcProfit(marketValue, h.costAmount)
@@ -193,6 +198,7 @@ export async function getDashboardPayload(
         nav: h.fund.nav,
         estimateNav: h.fund.estimateNav,
         estimateChangePct: h.fund.estimateChangePct,
+        navChangePct: h.fund.navChangePct,
         estimateTime: h.fund.estimateTime,
       },
     }
@@ -257,6 +263,7 @@ export async function getDashboardPayload(
       nav: item.fund.nav,
       estimateNav: item.fund.estimateNav,
       estimateChangePct: item.fund.estimateChangePct,
+      navChangePct: item.fund.navChangePct,
       estimateTime: item.fund.estimateTime,
     },
   }))

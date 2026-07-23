@@ -136,7 +136,9 @@ export function FundDetailClient({
   }, [data])
 
   const { fund, holding } = data
-  const chg = fund.estimateChangePct
+  const estChg = fund.estimateChangePct
+  const navChg = fund.navChangePct
+  const chg = estChg ?? navChg
 
   return (
     <div className="mx-auto w-full max-w-xl px-5 py-8 sm:px-6 sm:py-10">
@@ -198,7 +200,7 @@ export function FundDetailClient({
           {fmtNav(fund.estimateNav ?? fund.nav)}
         </p>
         <p className={cn("mt-4 text-sm font-medium tabular-nums", tone(chg))}>
-          {chg == null ? "涨跌 —" : `估算 ${fmtChg(chg)}`}
+          {chg == null ? "涨跌 —" : estChg != null ? `估算 ${fmtChg(estChg)}` : `日涨跌 ${fmtChg(navChg!)}`}
         </p>
         <p className="mt-1.5 text-xs text-muted-foreground">
           单位净值 {fmtNav(fund.nav)}

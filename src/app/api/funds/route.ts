@@ -87,6 +87,8 @@ export const POST = withApi(async ({ user }) => {
           // 单位净值：仅用 dwjz；勿用估值覆盖
           nav: info.nav ?? entry.nav,
           navDate: info.navDate ? new Date(info.navDate) : entry.navDate,
+          navChangePct: info.navChangePct ?? null,
+          // 估值字段：无估值时写 null，避免残留旧盘中数据或日涨跌冒充
           estimateNav: info.estimateNav ?? null,
           estimateChangePct: info.estimateChangePct ?? null,
           estimateTime: info.estimateTime ?? null,

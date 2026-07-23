@@ -31,6 +31,7 @@ export type HoldingListItem = {
     nav: number | null
     estimateNav: number | null
     estimateChangePct: number | null
+    navChangePct: number | null
     estimateTime: string | null
   }
   createdAt: string
@@ -79,6 +80,7 @@ export async function getHoldingsPayload(
       h.fund.estimateNav,
       h.fund.nav,
       h.fund.estimateChangePct,
+      h.fund.navChangePct,
     )
     const dayProfitRate = calcDayProfitRate(dayProfit, h.shares, h.fund.nav)
     const isEstimate = !isNavSettled(h.fund.navDate, h.fund.estimateTime)
@@ -103,6 +105,7 @@ export async function getHoldingsPayload(
         nav: h.fund.nav,
         estimateNav: h.fund.estimateNav,
         estimateChangePct: h.fund.estimateChangePct,
+        navChangePct: h.fund.navChangePct,
         estimateTime: h.fund.estimateTime,
       },
       createdAt: h.createdAt.toISOString(),

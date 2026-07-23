@@ -12,6 +12,7 @@ export type WatchlistItem = {
     nav: number | null
     estimateNav: number | null
     estimateChangePct: number | null
+    navChangePct: number | null
     estimateTime: string | null
   }
   createdAt: string
@@ -54,6 +55,7 @@ export async function getWatchlistPayload(
           nav: item.fund.nav,
           estimateNav: item.fund.estimateNav,
           estimateChangePct: item.fund.estimateChangePct,
+          navChangePct: item.fund.navChangePct,
           estimateTime: item.fund.estimateTime,
         },
         createdAt: item.createdAt.toISOString(),

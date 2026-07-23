@@ -35,6 +35,7 @@ export const GET = withApi(async ({ user }) => {
       h.fund.estimateNav,
       h.fund.nav,
       h.fund.estimateChangePct,
+      h.fund.navChangePct,
     );
     const dayProfitRate = calcDayProfitRate(dayProfit, h.shares, h.fund.nav);
     totalCost += h.costAmount;
@@ -53,6 +54,7 @@ export const GET = withApi(async ({ user }) => {
       nav: h.fund.nav,
       estimateNav: h.fund.estimateNav,
       estimateChangePct: h.fund.estimateChangePct,
+        navChangePct: h.fund.navChangePct,
       estimateTime: h.fund.estimateTime,
       marketValue,
       estimateValue,

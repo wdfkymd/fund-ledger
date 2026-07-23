@@ -28,9 +28,11 @@ model Fund {
   /** 最新单位净值 dwjz */
   nav                Float?
   navDate            DateTime?
-  /** 实时/盘中估值 gsz */
+  /** 最新公布净值的日涨跌幅 %（lsjz JZZZL，非盘中估值） */
+  navChangePct       Float?
+  /** 实时/盘中估值 gsz —— 仅来自估值接口 */
   estimateNav        Float?
-  /** 估算涨跌幅 %（如 -3.43） */
+  /** 盘中估算涨跌幅 %（gszzl）—— 仅来自估值接口，禁止塞日涨跌 */
   estimateChangePct  Float?
   /** 估值时间原文 gztime */
   estimateTime       String?

@@ -24,6 +24,7 @@ export type FundDetailPayload = {
     navDate: string | null
     estimateNav: number | null
     estimateChangePct: number | null
+    navChangePct: number | null
     estimateTime: string | null
   }
   holding: {
@@ -100,6 +101,7 @@ export async function getFundDetailPayload(
           type: info.type,
           nav: info.nav,
           navDate: info.navDate ? new Date(info.navDate) : null,
+          navChangePct: info.navChangePct,
           estimateNav: info.estimateNav,
           estimateChangePct: info.estimateChangePct,
           estimateTime: info.estimateTime,
@@ -109,6 +111,7 @@ export async function getFundDetailPayload(
           type: info.type ?? undefined,
           nav: info.nav ?? undefined,
           navDate: info.navDate ? new Date(info.navDate) : undefined,
+          navChangePct: info.navChangePct ?? undefined,
           estimateNav: info.estimateNav ?? undefined,
           estimateChangePct: info.estimateChangePct ?? undefined,
           estimateTime: info.estimateTime ?? undefined,
@@ -234,6 +237,7 @@ export async function getFundDetailPayload(
       fund.estimateNav,
       fund.nav,
       fund.estimateChangePct,
+      fund.navChangePct,
     )
     const dayProfitRate = calcDayProfitRate(
       dayProfit,
@@ -283,6 +287,7 @@ export async function getFundDetailPayload(
       navDate: fund.navDate ? fund.navDate.toISOString() : null,
       estimateNav: fund.estimateNav,
       estimateChangePct: fund.estimateChangePct,
+      navChangePct: fund.navChangePct,
       estimateTime: fund.estimateTime,
     },
     holding: holdingView,

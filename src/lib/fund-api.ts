@@ -2,15 +2,17 @@ export type EastMoneyFundInfo = {
   code: string;
   name: string;
   type?: string;
-  /** 最新单位净值 dwjz */
+  /** 最新单位净值 dwjz / DWJZ */
   nav?: number;
-  /** 单位净值日期 jzrq */
+  /** 单位净值日期 */
   navDate?: string;
-  /** 实时估值 gsz */
+  /** 最新公布净值日涨跌幅 %（JZZZL）—— 非盘中估值 */
+  navChangePct?: number;
+  /** 实时/盘中估值 gsz —— 仅估值接口 */
   estimateNav?: number;
-  /** 估算涨跌幅 %，如 -3.43 */
+  /** 盘中估算涨跌幅 % gszzl —— 仅估值接口 */
   estimateChangePct?: number;
-  /** 估值时间 gztime，如 2026-07-13 15:00 */
+  /** 估值时间 gztime */
   estimateTime?: string;
 };
 
@@ -45,10 +47,17 @@ function extractJsonp(text: string): unknown {
   }
 }
 
-/** 主路径：历史净值 lsjz 最近一条单位净值 + 搜索接口补名称/类型 */
-async function fetchFundNavFallback(
-  code: string,
-): Promise<EastMoneyFundInfo> {
+function toNum(raw: string | undefined | null): number | undefined {
+  if (raw == null || raw === "") return undefined;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+/**
+ * 主路径：历史净值 lsjz（单位净值 + 日涨跌）+ fundsuggest（名称/类型）。
+ * 不写入 estimate* 字段。
+ */
+async function fetchFundNavPrimary(code: string): Promise<EastMoneyFundInfo> {
   const normalized = code.trim();
   let name: string | undefined;
   let type: string | undefined;
@@ -58,7 +67,7 @@ async function fetchFundNavFallback(
     name = exact?.name;
     type = exact?.type;
   } catch {
-    /* ignore search failure */
+    /* ignore */
   }
 
   const url =
@@ -74,22 +83,21 @@ async function fetchFundNavFallback(
     signal: AbortSignal.timeout(10000),
   });
   if (!res.ok) {
-    throw new Error(`历史净值兜底失败: HTTP ${res.status}`);
+    throw new Error(`历史净值接口失败: HTTP ${res.status}`);
   }
   const text = await res.text();
   if (looksLikeHtml(text)) {
-    throw new Error("历史净值兜底返回了网页");
+    throw new Error("历史净值接口返回了网页");
   }
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
   if (start === -1 || end === -1) {
-    throw new Error("历史净值兜底格式异常");
+    throw new Error("历史净值接口格式异常");
   }
   let data: {
     Data?: {
       LSJZList?: Array<{ FSRQ?: string; DWJZ?: string; JZZZL?: string }>;
     };
-    ErrCode?: number;
   };
   try {
     data = JSON.parse(text.slice(start, end + 1));
@@ -108,74 +116,38 @@ async function fetchFundNavFallback(
     type,
     nav,
     navDate: row?.FSRQ,
+    navChangePct: toNum(row?.JZZZL),
   };
 }
 
-function toNum(raw: string | undefined): number | undefined {
-  if (raw == null || raw === "") return undefined;
-  const n = Number(raw);
-  return Number.isFinite(n) ? n : undefined;
-}
-
 /**
- * 拉取单只基金信息。
- *
- * 主路径：天天基金历史净值 lsjz（单位净值）+ fundsuggest（名称/类型）。
- * 可选增强：fundgz 实时估值；海外 VPS 上 fundgz 常返回 404 HTML，失败则静默跳过，
- * 不影响单位净值。
+ * 估值接口（fundgz）：只负责 gsz / gszzl / gztime。
+ * 失败返回 null，绝不把日涨跌伪装成估值。
  */
-export async function fetchFundFromEastMoney(
+async function fetchFundEstimate(
   code: string,
-): Promise<EastMoneyFundInfo> {
-  const normalized = code.trim();
-  if (!/^\d{6}$/.test(normalized)) {
-    throw new Error("基金代码应为 6 位数字");
-  }
-
-  // 主路径：lsjz + 搜索（在 xpian/海外机房稳定可用）
-  const base = await fetchFundNavFallback(normalized);
-
-  // 可选：尝试实时估值（成功则补 gsz；失败忽略）
-  try {
-    const est = await fetchFundEstimateOptional(normalized);
-    if (est) {
-      return {
-        ...base,
-        // 若估值接口带回更完整名称则采用
-        name: est.name || base.name,
-        estimateNav: est.estimateNav,
-        estimateChangePct: est.estimateChangePct,
-        estimateTime: est.estimateTime,
-        // 若估值接口也有当日 dwjz 且有效，可覆盖（一般与 lsjz 一致）
-        nav: est.nav && est.nav > 0 ? est.nav : base.nav,
-        navDate: est.navDate || base.navDate,
-      };
-    }
-  } catch {
-    /* fundgz 在海外常不可用，忽略 */
-  }
-
-  return base;
-}
-
-/** 可选的实时估值（fundgz）。失败返回 null，不抛错。 */
-async function fetchFundEstimateOptional(
-  code: string,
-): Promise<EastMoneyFundInfo | null> {
+): Promise<{
+  name?: string;
+  nav?: number;
+  navDate?: string;
+  estimateNav?: number;
+  estimateChangePct?: number;
+  estimateTime?: string;
+} | null> {
   const url = `https://fundgz.1234567.com.cn/js/${code}.js?rt=${Date.now()}`;
-  const res = await fetch(url, {
-    headers: {
-      Referer: "https://fund.eastmoney.com/",
-      "User-Agent": "Mozilla/5.0",
-    },
-    cache: "no-store",
-    signal: AbortSignal.timeout(5000),
-  });
-  if (!res.ok) return null;
-  const text = await res.text();
-  if (!text || looksLikeHtml(text)) return null;
-  if (text.includes("jsonpgz();") || text.includes("jsonpgz()")) return null;
   try {
+    const res = await fetch(url, {
+      headers: {
+        Referer: "https://fund.eastmoney.com/",
+        "User-Agent": "Mozilla/5.0",
+      },
+      cache: "no-store",
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return null;
+    const text = await res.text();
+    if (!text || looksLikeHtml(text)) return null;
+    if (text.includes("jsonpgz();") || text.includes("jsonpgz()")) return null;
     const data = extractJsonp(text) as {
       fundcode?: string;
       name?: string;
@@ -185,18 +157,52 @@ async function fetchFundEstimateOptional(
       jzrq?: string;
       gztime?: string;
     };
+    const estimateNav = toNum(data.gsz);
+    const estimateChangePct = toNum(data.gszzl);
+    // 没有估值字段则视为估值接口无效
+    if (estimateNav == null && estimateChangePct == null) return null;
     return {
-      code: data.fundcode ?? code,
-      name: data.name ?? code,
+      name: data.name ?? undefined,
       nav: toNum(data.dwjz),
       navDate: data.jzrq,
-      estimateNav: toNum(data.gsz),
-      estimateChangePct: toNum(data.gszzl),
+      estimateNav,
+      estimateChangePct,
       estimateTime: data.gztime,
     };
   } catch {
     return null;
   }
+}
+
+/**
+ * 拉取单只基金：净值主路径 + 估值可选增强。
+ * 字段语义严格分离：
+ * - nav / navDate / navChangePct ← lsjz
+ * - estimateNav / estimateChangePct / estimateTime ← fundgz only
+ */
+export async function fetchFundFromEastMoney(
+  code: string,
+): Promise<EastMoneyFundInfo> {
+  const normalized = code.trim();
+  if (!/^\d{6}$/.test(normalized)) {
+    throw new Error("基金代码应为 6 位数字");
+  }
+
+  const base = await fetchFundNavPrimary(normalized);
+  const est = await fetchFundEstimate(normalized);
+  if (!est) return base;
+
+  return {
+    ...base,
+    name: est.name || base.name,
+    // 估值接口若带回当日单位净值，可更新（与 lsjz 同源）
+    nav: est.nav && est.nav > 0 ? est.nav : base.nav,
+    navDate: est.navDate || base.navDate,
+    // 估值字段只来自估值接口
+    estimateNav: est.estimateNav,
+    estimateChangePct: est.estimateChangePct,
+    estimateTime: est.estimateTime,
+  };
 }
 
 export async function searchFundsFromEastMoney(keyword: string) {
@@ -257,8 +263,6 @@ export type FundNavHistoryPoint = {
 
 /**
  * 历史单位净值（天天基金 f10/lsjz）。
- * 接口单页约 20 条，按页拉取直到凑够 targetCount 或无更多数据。
- * 返回按日期升序；失败抛错，由调用方决定是否回退本地 NavHistory。
  */
 export async function fetchFundNavHistoryFromEastMoney(
   code: string,
@@ -295,6 +299,10 @@ export async function fetchFundNavHistoryFromEastMoney(
     }
 
     const text = await res.text();
+    if (looksLikeHtml(text)) {
+      if (byDate.size > 0) break;
+      throw new Error("历史净值返回了网页");
+    }
     const start = text.indexOf("{");
     const end = text.lastIndexOf("}");
     if (start === -1 || end === -1) {
@@ -333,6 +341,5 @@ export async function fetchFundNavHistoryFromEastMoney(
   const points = Array.from(byDate.values()).sort((a, b) =>
     a.date < b.date ? -1 : a.date > b.date ? 1 : 0,
   );
-  // 若超过目标，保留最近 want 条
   return points.length > want ? points.slice(points.length - want) : points;
 }

@@ -223,7 +223,7 @@ export function WatchlistClient({ initial }: { initial: WatchItem[] }) {
             size="icon-sm"
             onClick={() => handleRefresh(false)}
             disabled={refreshing || items.length === 0}
-            title="刷新估值"
+            title="刷新净值"
             className="text-muted-foreground"
           >
             <RefreshCwIcon
@@ -305,7 +305,7 @@ export function WatchlistClient({ initial }: { initial: WatchItem[] }) {
       ) : (
         <motion.div className="divide-y overflow-hidden rounded-xl border" {...containerV}>
           {items.map((item, i) => {
-            const chg = item.fund.estimateChangePct
+            const chg = item.fund.estimateChangePct ?? item.fund.navChangePct
             const est = item.fund.estimateNav
             const nav = item.fund.nav
             return (

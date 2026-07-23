@@ -251,7 +251,7 @@ export function DashboardClient({ initial }: { initial: DashboardPayload }) {
             size="icon-sm"
             onClick={() => void handleRefresh()}
             disabled={refreshing}
-            title="刷新估值与指数"
+            title="刷新净值与指数"
             className="text-muted-foreground"
           >
             <RefreshCwIcon
@@ -378,7 +378,7 @@ export function DashboardClient({ initial }: { initial: DashboardPayload }) {
                 const hSettled = !h.isEstimate
                 const dp = h.dayProfit
                 const dpr = h.dayProfitRate
-                const chg = h.fund.estimateChangePct
+                const chg = h.fund.estimateChangePct ?? h.fund.navChangePct
                 return (
                   <motion.li
                     key={h.id}
@@ -468,7 +468,7 @@ export function DashboardClient({ initial }: { initial: DashboardPayload }) {
         ) : (
           <motion.div className="divide-y overflow-hidden rounded-xl border" {...containerV}>
             {watchlist.map((item, i) => {
-              const chg = item.fund.estimateChangePct
+              const chg = item.fund.estimateChangePct ?? item.fund.navChangePct
               const est = item.fund.estimateNav
               const nav = item.fund.nav
               return (
