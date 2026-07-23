@@ -14,13 +14,98 @@ export type EastMoneyFundInfo = {
   estimateTime?: string;
 };
 
+function looksLikeHtml(text: string): boolean {
+  const head = text.trimStart().slice(0, 200).toLowerCase();
+  return (
+    head.startsWith("<!doctype") ||
+    head.startsWith("<html") ||
+    head.includes("<html") ||
+    head.includes("页面未找到")
+  );
+}
+
 function extractJsonp(text: string): unknown {
+  if (!text?.trim()) {
+    throw new Error("净值接口返回为空");
+  }
+  if (looksLikeHtml(text)) {
+    throw new Error("净值接口返回了网页而非数据（可能被拦截或接口变更）");
+  }
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start === -1 || end === -1 || end <= start) {
+    throw new Error("净值接口返回格式异常");
+  }
+  const slice = text.slice(start, end + 1);
+  try {
+    return JSON.parse(slice);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new Error(`净值 JSON 解析失败: ${msg}`);
+  }
+}
+
+/** 用历史净值接口兜底：拿最近一条单位净值 + 搜索接口补名称 */
+async function fetchFundNavFallback(
+  code: string,
+): Promise<EastMoneyFundInfo> {
+  const normalized = code.trim();
+  let name: string | undefined;
+  try {
+    const hits = await searchFundsFromEastMoney(normalized);
+    const exact = hits.find((h) => h.code === normalized) ?? hits[0];
+    name = exact?.name;
+  } catch {
+    /* ignore search failure */
+  }
+
+  const url =
+    `https://api.fund.eastmoney.com/f10/lsjz` +
+    `?callback=jQuery&fundCode=${normalized}` +
+    `&pageIndex=1&pageSize=1&startDate=&endDate=`;
+  const res = await fetch(url, {
+    headers: {
+      Referer: "https://fundf10.eastmoney.com/",
+      "User-Agent": "Mozilla/5.0",
+    },
+    cache: "no-store",
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!res.ok) {
+    throw new Error(`历史净值兜底失败: HTTP ${res.status}`);
+  }
+  const text = await res.text();
+  if (looksLikeHtml(text)) {
+    throw new Error("历史净值兜底返回了网页");
+  }
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
   if (start === -1 || end === -1) {
-    throw new Error("净值接口返回格式异常");
+    throw new Error("历史净值兜底格式异常");
   }
-  return JSON.parse(text.slice(start, end + 1));
+  let data: {
+    Data?: {
+      LSJZList?: Array<{ FSRQ?: string; DWJZ?: string; JZZZL?: string }>;
+    };
+    ErrCode?: number;
+  };
+  try {
+    data = JSON.parse(text.slice(start, end + 1));
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new Error(`历史净值 JSON 解析失败: ${msg}`);
+  }
+  const row = data.Data?.LSJZList?.[0];
+  const nav = toNum(row?.DWJZ);
+  if (nav == null || nav <= 0) {
+    throw new Error("未找到该基金净值");
+  }
+  return {
+    code: normalized,
+    name: name ?? normalized,
+    nav,
+    navDate: row?.FSRQ,
+  };
 }
 
 function toNum(raw: string | undefined): number | undefined {
@@ -53,33 +138,53 @@ export async function fetchFundFromEastMoney(
 
   const text = await res.text();
   if (!text || text.includes("jsonpgz();") || text.includes("jsonpgz()")) {
-    throw new Error("未找到该基金");
+    // 估值接口空响应：走历史净值兜底
+    return fetchFundNavFallback(normalized);
   }
 
-  const data = extractJsonp(text) as {
-    fundcode?: string;
-    name?: string;
-    gsz?: string;
-    dwjz?: string;
-    gszzl?: string;
-    jzrq?: string;
-    gztime?: string;
-  };
+  try {
+    if (looksLikeHtml(text)) {
+      return fetchFundNavFallback(normalized);
+    }
+    const data = extractJsonp(text) as {
+      fundcode?: string;
+      name?: string;
+      gsz?: string;
+      dwjz?: string;
+      gszzl?: string;
+      jzrq?: string;
+      gztime?: string;
+    };
 
-  // 单位净值与估值分开：不再用 gsz 覆盖 nav
-  const nav = toNum(data.dwjz);
-  const estimateNav = toNum(data.gsz);
-  const estimateChangePct = toNum(data.gszzl);
+    // 单位净值与估值分开：不再用 gsz 覆盖 nav
+    const nav = toNum(data.dwjz);
+    const estimateNav = toNum(data.gsz);
+    const estimateChangePct = toNum(data.gszzl);
 
-  return {
-    code: data.fundcode ?? normalized,
-    name: data.name ?? normalized,
-    nav,
-    navDate: data.jzrq,
-    estimateNav,
-    estimateChangePct,
-    estimateTime: data.gztime,
-  };
+    // 主接口无有效净值时也兜底
+    if (nav == null || nav <= 0) {
+      const fb = await fetchFundNavFallback(normalized);
+      return {
+        ...fb,
+        name: data.name || fb.name,
+        estimateNav: estimateNav ?? fb.estimateNav,
+        estimateChangePct: estimateChangePct ?? fb.estimateChangePct,
+        estimateTime: data.gztime ?? fb.estimateTime,
+      };
+    }
+
+    return {
+      code: data.fundcode ?? normalized,
+      name: data.name ?? normalized,
+      nav,
+      navDate: data.jzrq,
+      estimateNav,
+      estimateChangePct,
+      estimateTime: data.gztime,
+    };
+  } catch {
+    return fetchFundNavFallback(normalized);
+  }
 }
 
 export async function searchFundsFromEastMoney(keyword: string) {
@@ -103,13 +208,22 @@ export async function searchFundsFromEastMoney(keyword: string) {
   }
 
   const text = await res.text();
-  const data = JSON.parse(text) as {
+  if (looksLikeHtml(text)) {
+    throw new Error("搜索接口返回了网页而非 JSON");
+  }
+  let data: {
     Datas?: Array<{
       CODE?: string;
       NAME?: string;
       FundBaseInfo?: { FTYPE?: string };
     }>;
   };
+  try {
+    data = JSON.parse(text);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new Error(`搜索接口 JSON 解析失败: ${msg}`);
+  }
 
   return (data.Datas ?? [])
     .filter((item) => item.CODE && item.NAME)
