@@ -121,8 +121,11 @@ async function fetchFundNavPrimary(code: string): Promise<EastMoneyFundInfo> {
 }
 
 /**
- * 估值接口（fundgz）：只负责 gsz / gszzl / gztime。
- * 失败返回 null，绝不把日涨跌伪装成估值。
+ * 盘中估值（对齐基估宝）：
+ * 1) 天天 FundValuationLast（批量友好；仅 GSZ 有效才算估）
+ * 2) 新浪估算曲线末点
+ * 老 fundgz.1234567.com.cn JSONP 已失效（常返回 404 HTML），不再使用。
+ * 失败返回 null，绝不把日涨跌/昨净伪装成估值。
  */
 async function fetchFundEstimate(
   code: string,
@@ -134,41 +137,149 @@ async function fetchFundEstimate(
   estimateChangePct?: number;
   estimateTime?: string;
 } | null> {
-  const url = `https://fundgz.1234567.com.cn/js/${code}.js?rt=${Date.now()}`;
+  const fromTiantian = await fetchEstimateFundValuationLast(code);
+  if (fromTiantian) return fromTiantian;
+  const fromSina = await fetchEstimateSina(code);
+  if (fromSina) return fromSina;
+  return null;
+}
+
+async function fetchEstimateFundValuationLast(
+  code: string,
+): Promise<{
+  name?: string;
+  nav?: number;
+  navDate?: string;
+  estimateNav?: number;
+  estimateChangePct?: number;
+  estimateTime?: string;
+} | null> {
+  const fields = "FCODE,SHORTNAME,GSZZL,GZTIME,GSZ,NAV,PDATE";
+  const url =
+    `https://fundcomapi.tiantianfunds.com/mm/newCore/FundValuationLast` +
+    `?FCODES=${encodeURIComponent(code)}` +
+    `&FIELDS=${encodeURIComponent(fields)}`;
   try {
     const res = await fetch(url, {
       headers: {
         Referer: "https://fund.eastmoney.com/",
-        "User-Agent": "Mozilla/5.0",
+        "User-Agent":
+          "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
+        Accept: "application/json",
       },
       cache: "no-store",
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) return null;
     const text = await res.text();
     if (!text || looksLikeHtml(text)) return null;
-    if (text.includes("jsonpgz();") || text.includes("jsonpgz()")) return null;
-    const data = extractJsonp(text) as {
-      fundcode?: string;
-      name?: string;
-      gsz?: string;
-      dwjz?: string;
-      gszzl?: string;
-      jzrq?: string;
-      gztime?: string;
+    const root = JSON.parse(text) as {
+      success?: boolean;
+      errorCode?: number;
+      data?: Array<{
+        FCODE?: string;
+        SHORTNAME?: string;
+        GSZ?: number | string | null;
+        GSZZL?: number | string | null;
+        GZTIME?: string | null;
+        NAV?: number | string | null;
+        PDATE?: string | null;
+      }>;
     };
-    const estimateNav = toNum(data.gsz);
-    const estimateChangePct = toNum(data.gszzl);
-    // 没有估值字段则视为估值接口无效
-    if (estimateNav == null && estimateChangePct == null) return null;
+    if (root.success === false && root.errorCode != null && root.errorCode !== 0) {
+      return null;
+    }
+    const row = (root.data ?? []).find(
+      (d) => String(d.FCODE ?? "").trim() === code,
+    ) ?? root.data?.[0];
+    if (!row) return null;
+    const estimateNav = toNum(
+      row.GSZ == null ? undefined : String(row.GSZ),
+    );
+    const estimateChangePct = toNum(
+      row.GSZZL == null ? undefined : String(row.GSZZL),
+    );
+    // 仅真 GSZ 才算估；NAV/PDATE 可附带更新净值展示
+    if (estimateNav == null || estimateNav <= 0) return null;
     return {
-      name: data.name ?? undefined,
-      nav: toNum(data.dwjz),
-      navDate: data.jzrq,
+      name: row.SHORTNAME ?? undefined,
+      nav: toNum(row.NAV == null ? undefined : String(row.NAV)),
+      navDate: row.PDATE ?? undefined,
       estimateNav,
       estimateChangePct,
-      estimateTime: data.gztime,
+      estimateTime: row.GZTIME ?? undefined,
     };
+  } catch {
+    return null;
+  }
+}
+
+async function fetchEstimateSina(
+  code: string,
+): Promise<{
+  name?: string;
+  nav?: number;
+  navDate?: string;
+  estimateNav?: number;
+  estimateChangePct?: number;
+  estimateTime?: string;
+} | null> {
+  const url =
+    `https://stock.finance.sina.com.cn/fundInfo/api/openapi.php/` +
+    `FdFundService.getEstimateNetworthPic?symbol=${encodeURIComponent(code)}`;
+  try {
+    const res = await fetch(url, {
+      headers: {
+        Referer: "https://finance.sina.com.cn/",
+        "User-Agent":
+          "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
+        Accept: "application/json",
+      },
+      cache: "no-store",
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) return null;
+    const text = await res.text();
+    if (!text || looksLikeHtml(text)) return null;
+    const root = JSON.parse(text) as {
+      result?: {
+        data?: {
+          worth?: string;
+          worth_date?: string;
+          networth?: Array<{
+            pre_nav?: string | number;
+            growthrate?: string | number;
+            min_time?: string;
+            pre_date?: string;
+          }>;
+        };
+      };
+    };
+    const data = root.result?.data;
+    const series = data?.networth ?? [];
+    if (series.length > 0) {
+      const last = series[series.length - 1];
+      const estimateNav = toNum(
+        last.pre_nav == null ? undefined : String(last.pre_nav),
+      );
+      const growth = toNum(
+        last.growthrate == null ? undefined : String(last.growthrate),
+      );
+      // 新浪 growthrate 为小数（如 -0.0429 → -4.29%）
+      const estimateChangePct =
+        growth == null ? undefined : Number((growth * 100).toFixed(4));
+      if (estimateNav != null && estimateNav > 0) {
+        const asOf = [last.pre_date, last.min_time]
+          .filter(Boolean)
+          .join(" ");
+        return {
+          estimateNav,
+          estimateChangePct,
+          estimateTime: asOf || undefined,
+        };
+      }
+    }
+    return null;
   } catch {
     return null;
   }
@@ -178,7 +289,7 @@ async function fetchFundEstimate(
  * 拉取单只基金：净值主路径 + 估值可选增强。
  * 字段语义严格分离：
  * - nav / navDate / navChangePct ← lsjz
- * - estimateNav / estimateChangePct / estimateTime ← fundgz only
+ * - estimateNav / estimateChangePct / estimateTime ← FundValuationLast / 新浪 only
  */
 export async function fetchFundFromEastMoney(
   code: string,
